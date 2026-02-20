@@ -7,7 +7,14 @@ import {
   type AudioLevelState,
   type AudioPitchState,
 } from './audio'
-import { createDummyChart } from './chart'
+import {
+  convertSmfTrackToLaneChart,
+  createDummyChart,
+  listSmfTracks,
+  parseSmfFromArrayBuffer,
+  type ParsedSmf,
+  type SmfTrackSummary,
+} from './chart'
 import {
   LoopScoringEngine,
   createLoopScoringChartFromLaneScrollerChart,
@@ -26,7 +33,7 @@ if (!appRoot) {
 }
 
 const chart = createDummyChart()
-const laneChart = createDummyLaneScrollerChart()
+let activeLaneChart = createDummyLaneScrollerChart()
 
 const baseScoringConfig = createScoringConfig()
 const initialLatencyOffsetMs = clampLatencyOffsetMs(
@@ -52,7 +59,7 @@ const ui = renderAppShell(appRoot, {
 
 const laneScroller = new LaneScroller({
   canvas: ui.laneCanvas,
-  chart: laneChart,
+  chart: activeLaneChart,
   speedMultiplier: 1,
   onFpsSample: (sample) => {
     ui.laneFpsValue.textContent = sample.fps.toFixed(1)
@@ -60,7 +67,7 @@ const laneScroller = new LaneScroller({
 })
 
 const scoringEngine = new LoopScoringEngine({
-  chart: createLoopScoringChartFromLaneScrollerChart(laneChart),
+  chart: createLoopScoringChartFromLaneScrollerChart(activeLaneChart),
   config: scoringConfig,
 })
 
@@ -97,6 +104,7 @@ const transportClock = {
   previousPlayheadMs: laneScroller.getPlayheadMs(),
   absolutePlayheadMs: laneScroller.getPlayheadMs(),
 }
+let parsedSmf: ParsedSmf | null = null
 
 function formatErrorMessage(error: unknown): string {
   if (error instanceof Error) {
@@ -145,7 +153,7 @@ function updateButtons(): void {
 
 function updateTransportClock(): number {
   const currentPlayheadMs = laneScroller.getPlayheadMs()
-  const wrapThresholdMs = laneChart.loopDurationMs * 0.5
+  const wrapThresholdMs = activeLaneChart.loopDurationMs * 0.5
 
   if (currentPlayheadMs + wrapThresholdMs < transportClock.previousPlayheadMs) {
     transportClock.loopIndex += 1
@@ -153,8 +161,143 @@ function updateTransportClock(): number {
 
   transportClock.previousPlayheadMs = currentPlayheadMs
   transportClock.absolutePlayheadMs =
-    transportClock.loopIndex * laneChart.loopDurationMs + currentPlayheadMs
+    transportClock.loopIndex * activeLaneChart.loopDurationMs + currentPlayheadMs
   return transportClock.absolutePlayheadMs
+}
+
+function setMidiImportStatus(message: string): void {
+  ui.midiImportStatusValue.textContent = message
+}
+
+function resetMidiTrackSelect(): void {
+  ui.midiTrackSelect.innerHTML = ''
+  const placeholder = document.createElement('option')
+  placeholder.value = ''
+  placeholder.textContent = 'select track'
+  ui.midiTrackSelect.append(placeholder)
+  ui.midiTrackSelect.value = ''
+}
+
+function updateMidiImportControls(): void {
+  const hasParsedSmf = parsedSmf !== null
+  const hasSelectedTrack = hasParsedSmf && ui.midiTrackSelect.value !== ''
+  ui.midiTrackSelect.disabled = !hasParsedSmf || ui.midiTrackSelect.options.length <= 1
+  ui.midiImportButton.disabled = !hasSelectedTrack
+}
+
+function populateMidiTrackSelect(tracks: readonly SmfTrackSummary[]): void {
+  resetMidiTrackSelect()
+  tracks.forEach((track) => {
+    const option = document.createElement('option')
+    option.value = String(track.index)
+    option.textContent = `#${track.index + 1} ${track.name} (${track.noteCount} notes)`
+    ui.midiTrackSelect.append(option)
+  })
+
+  const firstTrack = tracks.find((track) => track.noteCount > 0) ?? tracks[0]
+  if (firstTrack) {
+    ui.midiTrackSelect.value = String(firstTrack.index)
+  }
+}
+
+function findFirstMidiFile(fileList: FileList | null): File | null {
+  if (!fileList || fileList.length === 0) {
+    return null
+  }
+
+  for (let index = 0; index < fileList.length; index += 1) {
+    const file = fileList.item(index)
+    if (!file) {
+      continue
+    }
+    const lowerName = file.name.toLowerCase()
+    if (lowerName.endsWith('.mid') || lowerName.endsWith('.midi')) {
+      return file
+    }
+  }
+
+  return fileList.item(0)
+}
+
+function applyImportedLaneChartFromSelectedTrack(): void {
+  if (!parsedSmf) {
+    setMidiImportStatus('MIDIを先に読み込んでください')
+    return
+  }
+
+  const trackIndex = Number(ui.midiTrackSelect.value)
+  if (!Number.isInteger(trackIndex) || trackIndex < 0) {
+    setMidiImportStatus('track を選択してください')
+    updateMidiImportControls()
+    return
+  }
+
+  const conversion = convertSmfTrackToLaneChart(parsedSmf, trackIndex)
+  if (!conversion.ok) {
+    setMidiImportStatus(`import失敗: ${conversion.error.code}`)
+    return
+  }
+
+  if (laneScroller.isRunning()) {
+    laneScroller.stop()
+    stopScoringLoop()
+    ui.laneFpsValue.textContent = '0.0'
+  }
+
+  const importedChart = {
+    loopDurationMs: conversion.value.loopDurationMs,
+    notes: conversion.value.notes.map((note) => ({ ...note })),
+  }
+  activeLaneChart = importedChart
+
+  laneScroller.setChart(importedChart)
+  laneScroller.setPlayheadMs(0)
+  laneScroller.renderNow()
+
+  transportClock.loopIndex = 0
+  transportClock.previousPlayheadMs = 0
+  transportClock.absolutePlayheadMs = 0
+
+  scoringEngine.setChart(createLoopScoringChartFromLaneScrollerChart(importedChart))
+  resetScoringView()
+  updateLaneStatus()
+  setMidiImportStatus(
+    `import完了: #${conversion.value.track.index + 1} ${conversion.value.track.name}`,
+  )
+}
+
+async function loadMidiFile(file: File): Promise<void> {
+  ui.midiSelectedNameValue.textContent = file.name
+  setMidiImportStatus('MIDI解析中...')
+  parsedSmf = null
+  resetMidiTrackSelect()
+  updateMidiImportControls()
+
+  let arrayBuffer: ArrayBuffer
+  try {
+    arrayBuffer = await file.arrayBuffer()
+  } catch (error) {
+    setMidiImportStatus(`読込失敗: ${formatErrorMessage(error)}`)
+    return
+  }
+
+  const parseResult = parseSmfFromArrayBuffer(arrayBuffer)
+  if (!parseResult.ok) {
+    setMidiImportStatus(`解析失敗: ${parseResult.error.code}`)
+    return
+  }
+
+  parsedSmf = parseResult.value
+  const tracks = listSmfTracks(parseResult.value)
+  if (tracks.length === 0) {
+    setMidiImportStatus('解析成功: trackが存在しません')
+    updateMidiImportControls()
+    return
+  }
+
+  populateMidiTrackSelect(tracks)
+  updateMidiImportControls()
+  setMidiImportStatus(`解析成功: ${tracks.length} tracks`)
 }
 
 function formatMidiNoteLabel(midiNote: number): string {
@@ -521,6 +664,58 @@ ui.latencyOffsetSlider.addEventListener('input', () => {
   applyLatencyOffset(offsetMs, true)
 })
 
+ui.midiDropZone.addEventListener('click', () => {
+  ui.midiFileInput.click()
+})
+
+ui.midiDropZone.addEventListener('keydown', (event) => {
+  if (event.key !== 'Enter' && event.key !== ' ') {
+    return
+  }
+  event.preventDefault()
+  ui.midiFileInput.click()
+})
+
+ui.midiDropZone.addEventListener('dragover', (event) => {
+  event.preventDefault()
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = 'copy'
+  }
+  ui.midiDropZone.dataset.dragOver = 'true'
+})
+
+ui.midiDropZone.addEventListener('dragleave', () => {
+  ui.midiDropZone.dataset.dragOver = 'false'
+})
+
+ui.midiDropZone.addEventListener('drop', (event) => {
+  event.preventDefault()
+  ui.midiDropZone.dataset.dragOver = 'false'
+  const droppedFile = findFirstMidiFile(event.dataTransfer?.files ?? null)
+  if (!droppedFile) {
+    setMidiImportStatus('MIDIファイルが見つかりません')
+    return
+  }
+  void loadMidiFile(droppedFile)
+})
+
+ui.midiFileInput.addEventListener('change', () => {
+  const selectedFile = findFirstMidiFile(ui.midiFileInput.files)
+  if (!selectedFile) {
+    setMidiImportStatus('MIDIファイルが選択されていません')
+    return
+  }
+  void loadMidiFile(selectedFile)
+})
+
+ui.midiTrackSelect.addEventListener('change', () => {
+  updateMidiImportControls()
+})
+
+ui.midiImportButton.addEventListener('click', () => {
+  applyImportedLaneChartFromSelectedTrack()
+})
+
 ui.laneStartButton.addEventListener('click', () => {
   laneScroller.start()
   updateTransportClock()
@@ -564,6 +759,10 @@ resetLevelMeter()
 resetPitchDebugPanel()
 resetScoringView()
 applyLatencyOffset(initialLatencyOffsetMs, false)
+resetMidiTrackSelect()
+setMidiImportStatus('idle')
+updateMidiImportControls()
+ui.midiDropZone.dataset.dragOver = 'false'
 laneScroller.setSpeedMultiplier(parseLaneSpeedMultiplier())
 updateTransportClock()
 updateLaneStatus()

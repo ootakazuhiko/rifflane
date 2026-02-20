@@ -81,6 +81,12 @@ body {
   padding-top: 16px;
 }
 
+.midi-import-panel {
+  margin-top: 18px;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 16px;
+}
+
 .audio-controls {
   display: grid;
   grid-template-columns: 1.3fr 2fr 1fr 1fr;
@@ -329,6 +335,106 @@ body {
   margin-bottom: 12px;
 }
 
+.midi-dropzone-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.midi-dropzone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 96px;
+  border: 2px dashed #94a3b8;
+  border-radius: 8px;
+  padding: 14px;
+  background: #f1f5f9;
+  color: #334155;
+  font-size: 0.9rem;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+
+.midi-dropzone:focus-visible,
+.midi-dropzone.is-dragover,
+.midi-dropzone[data-drag-over='true'] {
+  outline: none;
+  border-color: #0ea5e9;
+  background: #e0f2fe;
+}
+
+.midi-import-controls {
+  display: grid;
+  grid-template-columns: 1.9fr auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.midi-import-controls input[type="file"],
+.midi-import-controls select,
+.midi-import-controls button {
+  min-height: 38px;
+  border: 1px solid #94a3b8;
+  border-radius: 8px;
+  padding: 0 10px;
+  background: #ffffff;
+  font: inherit;
+  color: #0f172a;
+}
+
+.midi-import-controls input[type="file"] {
+  padding: 4px;
+  width: 100%;
+}
+
+.midi-import-controls input[type="file"]::file-selector-button {
+  margin-right: 10px;
+  border: 1px solid #94a3b8;
+  border-radius: 6px;
+  padding: 0 10px;
+  height: 28px;
+  background: #ffffff;
+  color: #0f172a;
+  font: inherit;
+  cursor: pointer;
+}
+
+.midi-import-controls button {
+  cursor: pointer;
+}
+
+.midi-import-controls button:disabled,
+.midi-import-controls select:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.midi-import-controls label {
+  color: #334155;
+  font-size: 0.88rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.midi-import-status-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+[data-role="midi-selected-name-value"] {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+[data-role="midi-import-status-value"] {
+  font-variant-numeric: tabular-nums;
+}
+
 .lane-canvas {
   display: block;
   width: 100%;
@@ -399,11 +505,17 @@ body {
     align-items: stretch;
   }
 
+  .midi-import-controls {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
   .latency-offset-value {
     text-align: left;
   }
 
-  .lane-controls label {
+  .lane-controls label,
+  .midi-import-controls label {
     text-align: left;
   }
 

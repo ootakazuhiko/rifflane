@@ -30,6 +30,12 @@ export interface AppShellRefs {
   resetStatsButton: HTMLButtonElement
   latencyOffsetSlider: HTMLInputElement
   latencyOffsetValue: HTMLElement
+  midiDropZone: HTMLElement
+  midiFileInput: HTMLInputElement
+  midiTrackSelect: HTMLSelectElement
+  midiImportButton: HTMLButtonElement
+  midiSelectedNameValue: HTMLElement
+  midiImportStatusValue: HTMLElement
   laneCanvas: HTMLCanvasElement
   laneStartButton: HTMLButtonElement
   laneStopButton: HTMLButtonElement
@@ -91,7 +97,7 @@ export function renderAppShell(root: HTMLElement, model: AppShellModel): AppShel
   root.innerHTML = `
     <section class="app-shell">
       <h1>Rifflane MVP Bootstrap</h1>
-      <p>Issue #2/#3 完了。Issue #4/#5/#6/#7/#8/#9 の統合検証UI。</p>
+      <p>Issue #2/#3 完了。Issue #4/#5/#6/#7/#8/#9/#10 の統合検証UI。</p>
       <div class="status-grid">
         <div class="status-card">
           <strong>Chart</strong>
@@ -223,6 +229,44 @@ export function renderAppShell(root: HTMLElement, model: AppShellModel): AppShel
         </div>
       </div>
 
+      <div class="midi-import-panel">
+        <div class="status-card midi-dropzone-card">
+          <strong>MIDI Import</strong>
+          <div
+            class="midi-dropzone"
+            data-role="midi-drop-zone"
+            tabindex="0"
+            aria-label="MIDI file drop zone"
+          >
+            MIDI ファイルをここにドラッグ＆ドロップ
+          </div>
+          <div class="midi-import-controls">
+            <input
+              id="midi-file-input"
+              type="file"
+              accept=".mid,.midi,audio/midi,audio/x-midi"
+              data-role="midi-file-input"
+              aria-label="MIDI file input"
+            />
+            <label for="midi-track-select">track</label>
+            <select id="midi-track-select" data-role="midi-track-select" aria-label="MIDI track select" disabled>
+              <option value="">select track</option>
+            </select>
+            <button type="button" data-role="midi-import-run" disabled>import</button>
+          </div>
+          <div class="midi-import-status-grid">
+            <div class="status-card">
+              <strong>選択中MIDI</strong>
+              <span data-role="midi-selected-name-value">未選択</span>
+            </div>
+            <div class="status-card">
+              <strong>状態</strong>
+              <span data-role="midi-import-status-value">idle</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="lane-panel">
         <div class="status-card lane-canvas-card">
           <strong>4-string Lane</strong>
@@ -307,6 +351,12 @@ export function renderAppShell(root: HTMLElement, model: AppShellModel): AppShel
     resetStatsButton: queryRequired<HTMLButtonElement>(root, '[data-role="stats-reset"]'),
     latencyOffsetSlider: queryRequired<HTMLInputElement>(root, '[data-role="latency-offset-slider"]'),
     latencyOffsetValue: queryRequired<HTMLElement>(root, '[data-role="latency-offset-value"]'),
+    midiDropZone: queryRequired<HTMLElement>(root, '[data-role="midi-drop-zone"]'),
+    midiFileInput: queryRequired<HTMLInputElement>(root, '[data-role="midi-file-input"]'),
+    midiTrackSelect: queryRequired<HTMLSelectElement>(root, '[data-role="midi-track-select"]'),
+    midiImportButton: queryRequired<HTMLButtonElement>(root, '[data-role="midi-import-run"]'),
+    midiSelectedNameValue: queryRequired<HTMLElement>(root, '[data-role="midi-selected-name-value"]'),
+    midiImportStatusValue: queryRequired<HTMLElement>(root, '[data-role="midi-import-status-value"]'),
     laneCanvas: queryRequired<HTMLCanvasElement>(root, '[data-role="lane-canvas"]'),
     laneStartButton: queryRequired<HTMLButtonElement>(root, '[data-role="lane-start"]'),
     laneStopButton: queryRequired<HTMLButtonElement>(root, '[data-role="lane-stop"]'),

@@ -1,16 +1,29 @@
-export type BassLane = 'E' | 'A' | 'D' | 'G'
+import type { ChartData } from './types'
 
-export interface ChartNote {
-  lane: BassLane
-  fret: number
-  timeMs: number
-  durationMs: number
-}
-
-export interface ChartData {
-  bpm: number
-  notes: ChartNote[]
-}
+export type { BassLane, ChartData, ChartNote, LaneChart } from './types'
+export {
+  DEFAULT_OPEN_STRING_MIDI_BY_LANE,
+  convertSmfTrackToLaneChart,
+  createChartDataFromSmfTrackLaneChart,
+  deriveLoopDurationMs,
+  listSmfTracks,
+  parseSmfFromArrayBuffer,
+} from './midi'
+export type {
+  ConvertSmfTrackToLaneChartOptions,
+  ConvertSmfTrackToLaneChartResult,
+  MidiChartError,
+  MidiChartErrorCode,
+  MidiChartResult,
+  OpenStringMidiByLane,
+  ParseSmfResult,
+  ParsedSmf,
+  ParsedSmfTrack,
+  ParsedSmfTrackNote,
+  PartialOpenStringMidiByLane,
+  SmfTrackLaneChart,
+  SmfTrackSummary,
+} from './midi'
 
 export function createDummyChart(): ChartData {
   return {

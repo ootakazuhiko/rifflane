@@ -4,6 +4,7 @@ import {
   listAudioInputDevices,
   startAudioCapture,
   type AudioCaptureSession,
+  type AudioLevelState,
 } from './audio'
 import { createDummyChart } from './chart'
 import { createScoringConfig } from './scoring'
@@ -28,6 +29,14 @@ const ui = renderAppShell(appRoot, {
 })
 
 let activeSession: AudioCaptureSession | null = null
+let meterRenderFrameId: number | null = null
+const meterStats = {
+  rms: 0,
+  peak: 0,
+  updateHz: 0,
+  updateCount: 0,
+  windowStartedAtMs: performance.now(),
+}
 
 function formatErrorMessage(error: unknown): string {
   if (error instanceof Error) {
@@ -47,6 +56,47 @@ function resetTelemetry(): void {
   ui.channelCountValue.textContent = '-'
   ui.baseLatencyValue.textContent = '-'
   ui.constraintsValue.textContent = 'echo/noise/agc = - / - / -'
+}
+
+function resetLevelMeter(): void {
+  if (meterRenderFrameId !== null) {
+    window.cancelAnimationFrame(meterRenderFrameId)
+    meterRenderFrameId = null
+  }
+  meterStats.rms = 0
+  meterStats.peak = 0
+  meterStats.updateHz = 0
+  meterStats.updateCount = 0
+  meterStats.windowStartedAtMs = performance.now()
+  ui.resetLevelMeter()
+}
+
+function renderLevelMeter(): void {
+  meterRenderFrameId = null
+  ui.updateLevelMeter(meterStats.rms, meterStats.peak, meterStats.updateHz)
+}
+
+function scheduleLevelMeterRender(): void {
+  if (meterRenderFrameId !== null) {
+    return
+  }
+  meterRenderFrameId = window.requestAnimationFrame(renderLevelMeter)
+}
+
+function onMeterLevel(level: AudioLevelState): void {
+  meterStats.rms = level.rms
+  meterStats.peak = level.peak
+  meterStats.updateCount += 1
+
+  const now = performance.now()
+  const elapsedMs = now - meterStats.windowStartedAtMs
+  if (elapsedMs >= 1000) {
+    meterStats.updateHz = (meterStats.updateCount / elapsedMs) * 1000
+    meterStats.updateCount = 0
+    meterStats.windowStartedAtMs = now
+  }
+
+  scheduleLevelMeterRender()
 }
 
 async function refreshDevices(): Promise<void> {
@@ -98,8 +148,9 @@ async function startCapture(): Promise<void> {
 
   ui.statusValue.textContent = 'ストリーム開始中...'
   try {
-    activeSession = await startAudioCapture(ui.deviceSelect.value)
-    ui.statusValue.textContent = 'ストリーム稼働中'
+    resetLevelMeter()
+    activeSession = await startAudioCapture(ui.deviceSelect.value, { onLevel: onMeterLevel })
+    ui.statusValue.textContent = 'ストリーム稼働中（AudioWorklet Meter 有効）'
     ui.sampleRateValue.textContent = `${activeSession.telemetry.sampleRateHz} Hz`
     ui.channelCountValue.textContent = `${activeSession.telemetry.channelCount ?? 'n/a'}`
     ui.baseLatencyValue.textContent =
@@ -114,6 +165,7 @@ async function startCapture(): Promise<void> {
   } catch (error) {
     ui.statusValue.textContent = `開始失敗: ${formatErrorMessage(error)}`
     resetTelemetry()
+    resetLevelMeter()
     updateButtons()
   }
 }
@@ -127,6 +179,7 @@ async function stopCapture(): Promise<void> {
   activeSession = null
   ui.statusValue.textContent = 'ストリーム停止'
   resetTelemetry()
+  resetLevelMeter()
   updateButtons()
 }
 
@@ -143,6 +196,10 @@ ui.stopButton.addEventListener('click', () => {
 })
 
 window.addEventListener('beforeunload', () => {
+  if (meterRenderFrameId !== null) {
+    window.cancelAnimationFrame(meterRenderFrameId)
+    meterRenderFrameId = null
+  }
   if (!activeSession) {
     return
   }
@@ -150,5 +207,6 @@ window.addEventListener('beforeunload', () => {
 })
 
 resetTelemetry()
+resetLevelMeter()
 updateButtons()
 void refreshDevices()

@@ -1,0 +1,109 @@
+:root {
+  font-family: "Segoe UI", sans-serif;
+  color: #0f172a;
+  background: #f8fafc;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+#app {
+  margin: 0 auto;
+  max-width: 900px;
+  padding: 40px 20px;
+}
+
+.app-shell {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.app-shell h1 {
+  margin: 0 0 10px;
+  font-size: 1.8rem;
+}
+
+.app-shell p {
+  margin: 0 0 20px;
+  color: #475569;
+}
+
+.status-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.status-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 12px;
+  background: #f8fafc;
+}
+
+.status-card strong {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 0.92rem;
+}
+
+.status-card span {
+  color: #334155;
+}
+
+.audio-panel {
+  border-top: 1px solid #e2e8f0;
+  padding-top: 16px;
+}
+
+.audio-controls {
+  display: grid;
+  grid-template-columns: 1.3fr 2fr 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.audio-controls button,
+.audio-controls select {
+  min-height: 38px;
+  border: 1px solid #94a3b8;
+  border-radius: 8px;
+  padding: 0 10px;
+  background: #ffffff;
+  font: inherit;
+  color: #0f172a;
+}
+
+.audio-controls button {
+  cursor: pointer;
+}
+
+.audio-controls button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.audio-status-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+
+@media (max-width: 720px) {
+  .audio-controls {
+    grid-template-columns: 1fr;
+  }
+}

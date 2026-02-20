@@ -13,6 +13,7 @@ export interface AudioConstraintsState {
 export interface AudioLevelState {
   rms: number
   peak: number
+  analysisTimeSec: number | null
 }
 
 export interface AudioPitchState {
@@ -20,6 +21,7 @@ export interface AudioPitchState {
   midiNote: number | null
   centsError: number | null
   confidence: number
+  analysisTimeSec: number | null
 }
 
 export interface AudioCaptureOptions {
@@ -55,6 +57,7 @@ interface LevelMeterMessage {
   type: 'level'
   rms: number
   peak: number
+  analysisTimeSec: number
 }
 
 interface YinPitchMessage {
@@ -63,6 +66,7 @@ interface YinPitchMessage {
   midiNote: number | null
   centsError: number | null
   confidence: number
+  analysisTimeSec: number
 }
 
 function assertMediaDevices(): void {
@@ -92,7 +96,8 @@ function isLevelMeterMessage(data: unknown): data is LevelMeterMessage {
   return (
     message.type === 'level' &&
     isFiniteNumber(message.rms) &&
-    isFiniteNumber(message.peak)
+    isFiniteNumber(message.peak) &&
+    isFiniteNumber(message.analysisTimeSec)
   )
 }
 
@@ -107,7 +112,8 @@ function isYinPitchMessage(data: unknown): data is YinPitchMessage {
     isNullableFiniteNumber(message.f0Hz) &&
     isNullableFiniteNumber(message.midiNote) &&
     isNullableFiniteNumber(message.centsError) &&
-    isFiniteNumber(message.confidence)
+    isFiniteNumber(message.confidence) &&
+    isFiniteNumber(message.analysisTimeSec)
   )
 }
 
@@ -246,12 +252,14 @@ export async function startAudioCapture(
     const level: AudioLevelState = {
       rms: 0,
       peak: 0,
+      analysisTimeSec: null,
     }
     const pitch: AudioPitchState = {
       f0Hz: null,
       midiNote: null,
       centsError: null,
       confidence: 0,
+      analysisTimeSec: null,
     }
 
     levelMeterNode.port.onmessage = (event: MessageEvent<unknown>) => {
@@ -261,6 +269,7 @@ export async function startAudioCapture(
 
       level.rms = event.data.rms
       level.peak = event.data.peak
+      level.analysisTimeSec = event.data.analysisTimeSec
       options.onLevel?.({ ...level })
     }
     pitchNode.port.onmessage = (event: MessageEvent<unknown>) => {
@@ -272,6 +281,7 @@ export async function startAudioCapture(
       pitch.midiNote = event.data.midiNote
       pitch.centsError = event.data.centsError
       pitch.confidence = event.data.confidence
+      pitch.analysisTimeSec = event.data.analysisTimeSec
       options.onPitch?.({ ...pitch })
     }
 

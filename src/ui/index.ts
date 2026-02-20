@@ -42,6 +42,14 @@ export interface AppShellRefs {
   laneSpeedSelect: HTMLSelectElement
   laneStateValue: HTMLElement
   laneFpsValue: HTMLElement
+  diagnosticsToggle: HTMLInputElement
+  diagnosticsModeValue: HTMLElement
+  diagnosticsPanel: HTMLElement
+  diagnosticsLaneFpsAvgValue: HTMLElement
+  diagnosticsMeterHzAvgValue: HTMLElement
+  diagnosticsAudioDelayAvgValue: HTMLElement
+  diagnosticsAudioDelayP95Value: HTMLElement
+  diagnosticsEstimatedLatencyValue: HTMLElement
   updateLevelMeter: (rmsLevel: number, peakLevel: number, updateHz: number) => void
   resetLevelMeter: () => void
 }
@@ -302,6 +310,48 @@ export function renderAppShell(root: HTMLElement, model: AppShellModel): AppShel
           </div>
         </div>
       </div>
+
+      <div class="diagnostics-section">
+        <div class="status-card diagnostics-header-row">
+          <label class="diagnostics-toggle-control" for="diagnostics-toggle">
+            <input
+              id="diagnostics-toggle"
+              type="checkbox"
+              data-role="diagnostics-toggle"
+              aria-label="diagnostics mode toggle"
+            />
+            <span>診断モード</span>
+          </label>
+          <span class="diagnostics-mode-value" data-role="diagnostics-mode-value">OFF</span>
+        </div>
+        <div class="status-card diagnostics-panel" data-role="diagnostics-panel" aria-hidden="true">
+          <strong>Diagnostics Metrics</strong>
+          <div class="diagnostics-grid">
+            <div class="diagnostics-item">
+              <span class="diagnostics-label">lane fps avg</span>
+              <span class="diagnostics-value"><span data-role="diagnostics-lane-fps-avg-value">0.0</span> fps</span>
+            </div>
+            <div class="diagnostics-item">
+              <span class="diagnostics-label">meter hz avg</span>
+              <span class="diagnostics-value"><span data-role="diagnostics-meter-hz-avg-value">0.0</span> Hz</span>
+            </div>
+            <div class="diagnostics-item">
+              <span class="diagnostics-label">audio delay avg</span>
+              <span class="diagnostics-value"><span data-role="diagnostics-audio-delay-avg-value">0.0</span> ms</span>
+            </div>
+            <div class="diagnostics-item">
+              <span class="diagnostics-label">audio delay p95</span>
+              <span class="diagnostics-value"><span data-role="diagnostics-audio-delay-p95-value">0.0</span> ms</span>
+            </div>
+            <div class="diagnostics-item">
+              <span class="diagnostics-label">estimated latency</span>
+              <span class="diagnostics-value">
+                <span data-role="diagnostics-estimated-latency-value">0.0</span> ms
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
     </section>
   `
 
@@ -324,6 +374,20 @@ export function renderAppShell(root: HTMLElement, model: AppShellModel): AppShel
   const resetLevelMeter = (): void => {
     updateLevelMeter(0, 0, 0)
   }
+
+  const diagnosticsToggle = queryRequired<HTMLInputElement>(root, '[data-role="diagnostics-toggle"]')
+  const diagnosticsModeValue = queryRequired<HTMLElement>(root, '[data-role="diagnostics-mode-value"]')
+  const diagnosticsPanel = queryRequired<HTMLElement>(root, '[data-role="diagnostics-panel"]')
+
+  const applyDiagnosticsMode = (enabled: boolean): void => {
+    diagnosticsModeValue.textContent = enabled ? 'ON' : 'OFF'
+    diagnosticsPanel.setAttribute('aria-hidden', enabled ? 'false' : 'true')
+  }
+
+  applyDiagnosticsMode(diagnosticsToggle.checked)
+  diagnosticsToggle.addEventListener('change', () => {
+    applyDiagnosticsMode(diagnosticsToggle.checked)
+  })
 
   return {
     refreshButton: queryRequired<HTMLButtonElement>(root, '[data-role="refresh-devices"]'),
@@ -363,6 +427,23 @@ export function renderAppShell(root: HTMLElement, model: AppShellModel): AppShel
     laneSpeedSelect: queryRequired<HTMLSelectElement>(root, '[data-role="lane-speed-multiplier"]'),
     laneStateValue: queryRequired<HTMLElement>(root, '[data-role="lane-state-value"]'),
     laneFpsValue: queryRequired<HTMLElement>(root, '[data-role="lane-fps-value"]'),
+    diagnosticsToggle,
+    diagnosticsModeValue,
+    diagnosticsPanel,
+    diagnosticsLaneFpsAvgValue: queryRequired<HTMLElement>(root, '[data-role="diagnostics-lane-fps-avg-value"]'),
+    diagnosticsMeterHzAvgValue: queryRequired<HTMLElement>(root, '[data-role="diagnostics-meter-hz-avg-value"]'),
+    diagnosticsAudioDelayAvgValue: queryRequired<HTMLElement>(
+      root,
+      '[data-role="diagnostics-audio-delay-avg-value"]',
+    ),
+    diagnosticsAudioDelayP95Value: queryRequired<HTMLElement>(
+      root,
+      '[data-role="diagnostics-audio-delay-p95-value"]',
+    ),
+    diagnosticsEstimatedLatencyValue: queryRequired<HTMLElement>(
+      root,
+      '[data-role="diagnostics-estimated-latency-value"]',
+    ),
     updateLevelMeter,
     resetLevelMeter,
   }

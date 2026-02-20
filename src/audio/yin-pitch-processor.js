@@ -31,13 +31,14 @@ function readBoundedNumber(value, fallback, min, max) {
   return value
 }
 
-function createUnvoicedResult() {
+function createUnvoicedResult(analysisTimeSec) {
   return {
     type: 'pitch',
     f0Hz: null,
     midiNote: null,
     centsError: null,
     confidence: 0,
+    analysisTimeSec,
   }
 }
 
@@ -105,7 +106,8 @@ class YinPitchProcessor extends AudioWorkletProcessor {
 
     if (this.framesSinceLastReport >= this.reportIntervalFrames) {
       this.framesSinceLastReport = 0
-      this.port.postMessage(this.detectPitch())
+      const analysisTimeSec = (currentFrame + frameLength) / sampleRate
+      this.port.postMessage(this.detectPitch(analysisTimeSec))
     }
 
     return true
@@ -164,30 +166,30 @@ class YinPitchProcessor extends AudioWorkletProcessor {
     return true
   }
 
-  detectPitch() {
+  detectPitch(analysisTimeSec) {
     if (!this.copyLatestFrame()) {
-      return createUnvoicedResult()
+      return createUnvoicedResult(analysisTimeSec)
     }
 
     const rms = this.computeRms(this.analysisFrame)
     if (rms < MIN_ANALYSIS_RMS) {
-      return createUnvoicedResult()
+      return createUnvoicedResult(analysisTimeSec)
     }
 
     this.computeDifferenceAndCmnd()
     const tau = this.findTauEstimate()
     if (tau < 0) {
-      return createUnvoicedResult()
+      return createUnvoicedResult(analysisTimeSec)
     }
 
     const refinedTau = this.refineTau(tau)
     if (!Number.isFinite(refinedTau) || refinedTau <= 0) {
-      return createUnvoicedResult()
+      return createUnvoicedResult(analysisTimeSec)
     }
 
     const f0Hz = sampleRate / refinedTau
     if (!Number.isFinite(f0Hz) || f0Hz < this.minFrequencyHz || f0Hz > this.maxFrequencyHz) {
-      return createUnvoicedResult()
+      return createUnvoicedResult(analysisTimeSec)
     }
 
     const midiFloat = 69 + 12 * Math.log2(f0Hz / 440)
@@ -201,6 +203,7 @@ class YinPitchProcessor extends AudioWorkletProcessor {
       midiNote,
       centsError,
       confidence,
+      analysisTimeSec,
     }
   }
 

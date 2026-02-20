@@ -32,6 +32,12 @@ if (!appRoot) {
   throw new Error('Missing #app root element')
 }
 
+const LATENCY_OFFSET_MIN_MS = -150
+const LATENCY_OFFSET_MAX_MS = 150
+const DIAGNOSTICS_MODE_STORAGE_KEY = 'rifflane.diagnosticsMode'
+const AUDIO_DELAY_SAMPLES_CAPACITY = 240
+const AUDIO_DELAY_MIN_MS = 0
+const AUDIO_DELAY_MAX_MS = 1000
 const chart = createDummyChart()
 let activeLaneChart = createDummyLaneScrollerChart()
 
@@ -63,6 +69,7 @@ const laneScroller = new LaneScroller({
   speedMultiplier: 1,
   onFpsSample: (sample) => {
     ui.laneFpsValue.textContent = sample.fps.toFixed(1)
+    registerLaneFpsSample(sample.fps)
   },
 })
 
@@ -77,12 +84,11 @@ const PITCH_OFF_CONFIDENCE = 0.55
 const NOTE_ON_STABLE_FRAMES = 2
 const NOTE_OFF_STABLE_FRAMES = 3
 const NOTE_CHANGE_SEMITONE_TOLERANCE = 0.8
-const LATENCY_OFFSET_MIN_MS = -150
-const LATENCY_OFFSET_MAX_MS = 150
 
 let activeSession: AudioCaptureSession | null = null
 let meterRenderFrameId: number | null = null
 let scoringFrameId: number | null = null
+let diagnosticsRenderFrameId: number | null = null
 
 const pitchTracking = {
   activeMidiNote: null as number | null,
@@ -97,6 +103,20 @@ const meterStats = {
   updateHz: 0,
   updateCount: 0,
   windowStartedAtMs: performance.now(),
+}
+
+const diagnosticsStats = {
+  enabled: loadDiagnosticsMode(),
+  laneFpsCurrent: 0,
+  laneFpsSum: 0,
+  laneFpsCount: 0,
+  meterHzCurrent: 0,
+  meterHzSum: 0,
+  meterHzCount: 0,
+  audioDelaySamplesMs: [] as number[],
+  audioDelayAvgMs: 0,
+  audioDelayP95Ms: 0,
+  baseLatencyMs: null as number | null,
 }
 
 const transportClock = {
@@ -127,6 +147,135 @@ function formatLatencyOffsetMs(offsetMs: number): string {
     return `+${normalizedOffsetMs}ms`
   }
   return `${normalizedOffsetMs}ms`
+}
+
+function loadDiagnosticsMode(): boolean {
+  try {
+    return window.localStorage.getItem(DIAGNOSTICS_MODE_STORAGE_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function saveDiagnosticsMode(enabled: boolean): void {
+  try {
+    window.localStorage.setItem(DIAGNOSTICS_MODE_STORAGE_KEY, enabled ? '1' : '0')
+  } catch {
+    // Ignore storage write failures.
+  }
+}
+
+function average(values: readonly number[]): number {
+  if (values.length === 0) {
+    return 0
+  }
+  let sum = 0
+  for (let index = 0; index < values.length; index += 1) {
+    sum += values[index]
+  }
+  return sum / values.length
+}
+
+function percentile(values: readonly number[], ratio: number): number {
+  if (values.length === 0) {
+    return 0
+  }
+  const sorted = [...values].sort((left, right) => left - right)
+  const clampedRatio = Math.max(0, Math.min(1, ratio))
+  const position = Math.ceil(sorted.length * clampedRatio) - 1
+  const index = Math.max(0, Math.min(sorted.length - 1, position))
+  return sorted[index]
+}
+
+function scheduleDiagnosticsRender(): void {
+  if (diagnosticsRenderFrameId !== null) {
+    return
+  }
+  diagnosticsRenderFrameId = window.requestAnimationFrame(renderDiagnostics)
+}
+
+function renderDiagnostics(): void {
+  diagnosticsRenderFrameId = null
+  const laneFpsAvg =
+    diagnosticsStats.laneFpsCount === 0 ? 0 : diagnosticsStats.laneFpsSum / diagnosticsStats.laneFpsCount
+  const meterHzAvg =
+    diagnosticsStats.meterHzCount === 0 ? 0 : diagnosticsStats.meterHzSum / diagnosticsStats.meterHzCount
+
+  ui.diagnosticsModeValue.textContent = diagnosticsStats.enabled ? 'ON' : 'OFF'
+  ui.diagnosticsPanel.setAttribute('aria-hidden', diagnosticsStats.enabled ? 'false' : 'true')
+  ui.diagnosticsLaneFpsAvgValue.textContent = laneFpsAvg.toFixed(1)
+  ui.diagnosticsMeterHzAvgValue.textContent = meterHzAvg.toFixed(1)
+  ui.diagnosticsAudioDelayAvgValue.textContent = diagnosticsStats.audioDelayAvgMs.toFixed(1)
+  ui.diagnosticsAudioDelayP95Value.textContent = diagnosticsStats.audioDelayP95Ms.toFixed(1)
+
+  const estimatedLatencyMs = diagnosticsStats.baseLatencyMs === null
+    ? diagnosticsStats.audioDelayAvgMs
+    : diagnosticsStats.baseLatencyMs + diagnosticsStats.audioDelayAvgMs
+  ui.diagnosticsEstimatedLatencyValue.textContent = estimatedLatencyMs.toFixed(1)
+}
+
+function setDiagnosticsMode(enabled: boolean, persist: boolean): void {
+  diagnosticsStats.enabled = enabled
+  ui.diagnosticsToggle.checked = enabled
+  if (persist) {
+    saveDiagnosticsMode(enabled)
+  }
+  scheduleDiagnosticsRender()
+}
+
+function resetDiagnosticsMetrics(): void {
+  diagnosticsStats.laneFpsCurrent = 0
+  diagnosticsStats.laneFpsSum = 0
+  diagnosticsStats.laneFpsCount = 0
+  diagnosticsStats.meterHzCurrent = 0
+  diagnosticsStats.meterHzSum = 0
+  diagnosticsStats.meterHzCount = 0
+  diagnosticsStats.audioDelaySamplesMs = []
+  diagnosticsStats.audioDelayAvgMs = 0
+  diagnosticsStats.audioDelayP95Ms = 0
+  diagnosticsStats.baseLatencyMs = null
+  scheduleDiagnosticsRender()
+}
+
+function registerLaneFpsSample(fps: number): void {
+  if (!Number.isFinite(fps) || fps <= 0) {
+    return
+  }
+  diagnosticsStats.laneFpsCurrent = fps
+  diagnosticsStats.laneFpsSum += fps
+  diagnosticsStats.laneFpsCount += 1
+  scheduleDiagnosticsRender()
+}
+
+function registerMeterUpdateHzSample(updateHz: number): void {
+  if (!Number.isFinite(updateHz) || updateHz <= 0) {
+    return
+  }
+  diagnosticsStats.meterHzCurrent = updateHz
+  diagnosticsStats.meterHzSum += updateHz
+  diagnosticsStats.meterHzCount += 1
+  scheduleDiagnosticsRender()
+}
+
+function registerAudioDelaySample(analysisTimeSec: number | null): void {
+  if (analysisTimeSec === null || !activeSession) {
+    return
+  }
+
+  const delayMs = (activeSession.context.currentTime - analysisTimeSec) * 1000
+  if (!Number.isFinite(delayMs)) {
+    return
+  }
+
+  const normalizedDelayMs = Math.max(AUDIO_DELAY_MIN_MS, Math.min(AUDIO_DELAY_MAX_MS, delayMs))
+  diagnosticsStats.audioDelaySamplesMs.push(normalizedDelayMs)
+  if (diagnosticsStats.audioDelaySamplesMs.length > AUDIO_DELAY_SAMPLES_CAPACITY) {
+    diagnosticsStats.audioDelaySamplesMs.shift()
+  }
+
+  diagnosticsStats.audioDelayAvgMs = average(diagnosticsStats.audioDelaySamplesMs)
+  diagnosticsStats.audioDelayP95Ms = percentile(diagnosticsStats.audioDelaySamplesMs, 0.95)
+  scheduleDiagnosticsRender()
 }
 
 function parseLaneSpeedMultiplier(): number {
@@ -480,6 +629,7 @@ function startScoringLoop(): void {
 }
 
 function onPitchState(pitch: AudioPitchState): void {
+  registerAudioDelaySample(pitch.analysisTimeSec)
   updatePitchDebugPanel(pitch)
   updatePitchTrackingState(pitch)
 
@@ -537,6 +687,7 @@ function scheduleLevelMeterRender(): void {
 }
 
 function onMeterLevel(level: AudioLevelState): void {
+  registerAudioDelaySample(level.analysisTimeSec)
   meterStats.rms = level.rms
   meterStats.peak = level.peak
   meterStats.updateCount += 1
@@ -547,6 +698,7 @@ function onMeterLevel(level: AudioLevelState): void {
     meterStats.updateHz = (meterStats.updateCount / elapsedMs) * 1000
     meterStats.updateCount = 0
     meterStats.windowStartedAtMs = now
+    registerMeterUpdateHzSample(meterStats.updateHz)
   }
 
   scheduleLevelMeterRender()
@@ -603,6 +755,7 @@ async function startCapture(): Promise<void> {
   try {
     resetLevelMeter()
     resetPitchDebugPanel()
+    resetDiagnosticsMetrics()
     activeSession = await startAudioCapture(ui.deviceSelect.value, {
       onLevel: onMeterLevel,
       onPitch: onPitchState,
@@ -614,6 +767,11 @@ async function startCapture(): Promise<void> {
       activeSession.telemetry.baseLatencySec === null
         ? 'n/a'
         : `${activeSession.telemetry.baseLatencySec.toFixed(4)} sec`
+    diagnosticsStats.baseLatencyMs =
+      activeSession.telemetry.baseLatencySec === null
+        ? null
+        : activeSession.telemetry.baseLatencySec * 1000
+    scheduleDiagnosticsRender()
     ui.constraintsValue.textContent =
       `echo/noise/agc = ${formatConstraint(activeSession.constraints.echoCancellation)} / ` +
       `${formatConstraint(activeSession.constraints.noiseSuppression)} / ` +
@@ -639,6 +797,7 @@ async function stopCapture(): Promise<void> {
   resetTelemetry()
   resetLevelMeter()
   resetPitchDebugPanel()
+  resetDiagnosticsMetrics()
   updateButtons()
 }
 
@@ -662,6 +821,10 @@ ui.resetStatsButton.addEventListener('click', () => {
 ui.latencyOffsetSlider.addEventListener('input', () => {
   const offsetMs = Number(ui.latencyOffsetSlider.value)
   applyLatencyOffset(offsetMs, true)
+})
+
+ui.diagnosticsToggle.addEventListener('change', () => {
+  setDiagnosticsMode(ui.diagnosticsToggle.checked, true)
 })
 
 ui.midiDropZone.addEventListener('click', () => {
@@ -748,6 +911,11 @@ window.addEventListener('beforeunload', () => {
     meterRenderFrameId = null
   }
 
+  if (diagnosticsRenderFrameId !== null) {
+    window.cancelAnimationFrame(diagnosticsRenderFrameId)
+    diagnosticsRenderFrameId = null
+  }
+
   if (!activeSession) {
     return
   }
@@ -758,6 +926,8 @@ resetTelemetry()
 resetLevelMeter()
 resetPitchDebugPanel()
 resetScoringView()
+resetDiagnosticsMetrics()
+setDiagnosticsMode(diagnosticsStats.enabled, false)
 applyLatencyOffset(initialLatencyOffsetMs, false)
 resetMidiTrackSelect()
 setMidiImportStatus('idle')

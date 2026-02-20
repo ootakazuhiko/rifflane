@@ -18,6 +18,7 @@ class LevelMeterProcessor extends AudioWorkletProcessor {
   process(inputs) {
     const channels = inputs[0] ?? []
     const frameLength = channels[0]?.length ?? FALLBACK_RENDER_QUANTUM_FRAMES
+    const analysisTimeSec = (currentFrame + frameLength) / sampleRate
 
     for (let channelIndex = 0; channelIndex < channels.length; channelIndex += 1) {
       const channelData = channels[channelIndex]
@@ -43,6 +44,7 @@ class LevelMeterProcessor extends AudioWorkletProcessor {
         type: 'level',
         rms,
         peak: this.accumulatedPeak,
+        analysisTimeSec,
       })
       this.accumulatedSquare = 0
       this.accumulatedSamples = 0

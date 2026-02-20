@@ -2,6 +2,11 @@
 
 Rifflane は、4弦ベース向けのレーン表示とリアルタイム採点を統合した検証用 UI です。現行実装は Vite + TypeScript で構成されています。
 
+## リリース管理ドキュメント
+
+- 変更履歴: [`CHANGELOG.md`](CHANGELOG.md)
+- バージョニング方針: [`docs/versioning-policy.md`](docs/versioning-policy.md)
+
 ## Setup instructions
 
 ### 前提条件
@@ -29,6 +34,8 @@ npm run dev
 ```bash
 npm run lint
 npm run typecheck
+npm run test:unit
+npm run test:e2e
 npm run build
 ```
 
@@ -36,6 +43,8 @@ npm run build
 - `build`: `tsc && vite build`
 - `typecheck`: `tsc --noEmit`
 - `lint`: `eslint "src/**/*.{ts,tsx}"`
+- `test:unit`: `vitest run`
+- `test:e2e`: `playwright test`
 
 2026-02-20 時点で `lint/typecheck/build` はローカル実行で通過しています。
 
@@ -58,6 +67,11 @@ npm run build
   - 既定判定窓: timing `80ms` / pitch `35cents`
   - Perfect 窓: timing `40ms` / pitch `20cents`
   - latency offset: `-150ms ~ +150ms`（`localStorage` 永続化）
+- diagnostics mode
+  - lane FPS 平均
+  - meter 更新Hz 平均
+  - AudioWorklet→main thread 推定遅延（avg/p95）
+  - 推定遅延（`baseLatency + worklet delay avg`）
 
 ## WSL2 notes
 
@@ -149,4 +163,3 @@ adb reverse --remove tcp:5173
 | M-05 | WSL2 + Windowsブラウザ | WSL2 接続性 | `npm run dev -- --host 0.0.0.0 --port 5173` | Windows から UI 表示、操作可能 |
 | M-06 | Android + Chrome | `adb reverse` 経由表示 | `adb reverse tcp:5173 tcp:5173` 後に `http://localhost:5173` | UI 表示、操作可能 |
 | M-07 | Android + Chrome | audio/scoring 基本動作 | 権限許可、`開始`、lane `start` | メーター更新、判定イベント更新 |
-

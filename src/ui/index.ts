@@ -17,6 +17,11 @@ export interface AppShellRefs {
   channelCountValue: HTMLElement
   baseLatencyValue: HTMLElement
   constraintsValue: HTMLElement
+  pitchF0HzValue: HTMLElement
+  pitchMidiNoteValue: HTMLElement
+  pitchCentsErrorValue: HTMLElement
+  pitchConfidenceValue: HTMLElement
+  pitchNoteTrackingStateValue: HTMLElement
   laneCanvas: HTMLCanvasElement
   laneStartButton: HTMLButtonElement
   laneStopButton: HTMLButtonElement
@@ -62,7 +67,7 @@ export function renderAppShell(root: HTMLElement, model: AppShellModel): AppShel
   root.innerHTML = `
     <section class="app-shell">
       <h1>Rifflane MVP Bootstrap</h1>
-      <p>Issue #2/#3 完了。Issue #4/#5 (Audio Input + Worklet Meter) の検証UI。</p>
+      <p>Issue #2/#3 完了。Issue #4/#5/#6/#7 の統合検証UI。</p>
       <div class="status-grid">
         <div class="status-card">
           <strong>Chart</strong>
@@ -126,6 +131,31 @@ export function renderAppShell(root: HTMLElement, model: AppShellModel): AppShel
           <p class="level-meter-update-hz">
             更新周波数: <span data-role="meter-update-hz-value">0.0</span> Hz
           </p>
+        </div>
+        <div class="pitch-debug-card status-card" aria-label="Pitch debug panel">
+          <strong>Pitch Debug</strong>
+          <div class="pitch-debug-grid">
+            <div class="pitch-debug-item">
+              <span class="pitch-debug-label">f0Hz</span>
+              <span class="pitch-debug-value" data-role="pitch-f0-hz-value">-</span>
+            </div>
+            <div class="pitch-debug-item">
+              <span class="pitch-debug-label">midi note</span>
+              <span class="pitch-debug-value" data-role="pitch-midi-note-value">-</span>
+            </div>
+            <div class="pitch-debug-item">
+              <span class="pitch-debug-label">cents error</span>
+              <span class="pitch-debug-value" data-role="pitch-cents-error-value">-</span>
+            </div>
+            <div class="pitch-debug-item">
+              <span class="pitch-debug-label">confidence</span>
+              <span class="pitch-debug-value" data-role="pitch-confidence-value">-</span>
+            </div>
+            <div class="pitch-debug-item">
+              <span class="pitch-debug-label">note tracking state (note on/off)</span>
+              <span class="pitch-debug-value" data-role="pitch-note-tracking-state-value">off</span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -197,6 +227,14 @@ export function renderAppShell(root: HTMLElement, model: AppShellModel): AppShel
     channelCountValue: queryRequired<HTMLElement>(root, '[data-role="channel-count-value"]'),
     baseLatencyValue: queryRequired<HTMLElement>(root, '[data-role="base-latency-value"]'),
     constraintsValue: queryRequired<HTMLElement>(root, '[data-role="constraints-value"]'),
+    pitchF0HzValue: queryRequired<HTMLElement>(root, '[data-role="pitch-f0-hz-value"]'),
+    pitchMidiNoteValue: queryRequired<HTMLElement>(root, '[data-role="pitch-midi-note-value"]'),
+    pitchCentsErrorValue: queryRequired<HTMLElement>(root, '[data-role="pitch-cents-error-value"]'),
+    pitchConfidenceValue: queryRequired<HTMLElement>(root, '[data-role="pitch-confidence-value"]'),
+    pitchNoteTrackingStateValue: queryRequired<HTMLElement>(
+      root,
+      '[data-role="pitch-note-tracking-state-value"]',
+    ),
     laneCanvas: queryRequired<HTMLCanvasElement>(root, '[data-role="lane-canvas"]'),
     laneStartButton: queryRequired<HTMLButtonElement>(root, '[data-role="lane-start"]'),
     laneStopButton: queryRequired<HTMLButtonElement>(root, '[data-role="lane-stop"]'),

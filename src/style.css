@@ -112,6 +112,41 @@ body {
   margin-top: 12px;
 }
 
+.pitch-debug-card {
+  margin-top: 12px;
+}
+
+.pitch-debug-grid {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.pitch-debug-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.pitch-debug-label {
+  color: #334155;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.pitch-debug-value {
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
 .level-meter-row {
   display: grid;
   grid-template-columns: 44px 1fr 92px;
@@ -252,5 +287,9 @@ body {
   .level-meter-value {
     grid-column: 1 / -1;
     text-align: left;
+  }
+
+  .pitch-debug-grid {
+    grid-template-columns: 1fr;
   }
 }

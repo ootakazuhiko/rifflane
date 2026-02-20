@@ -5,6 +5,7 @@ import {
   startAudioCapture,
   type AudioCaptureSession,
   type AudioLevelState,
+  type AudioPitchState,
 } from './audio'
 import { createDummyChart } from './chart'
 import { createScoringConfig } from './scoring'
@@ -36,9 +37,21 @@ const laneScroller = new LaneScroller({
     ui.laneFpsValue.textContent = sample.fps.toFixed(1)
   },
 })
+const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
+const PITCH_ON_CONFIDENCE = 0.82
+const PITCH_OFF_CONFIDENCE = 0.55
+const NOTE_ON_STABLE_FRAMES = 2
+const NOTE_OFF_STABLE_FRAMES = 3
+const NOTE_CHANGE_SEMITONE_TOLERANCE = 0.8
 
 let activeSession: AudioCaptureSession | null = null
 let meterRenderFrameId: number | null = null
+const pitchTracking = {
+  activeMidiNote: null as number | null,
+  candidateMidiNote: null as number | null,
+  candidateStableFrames: 0,
+  offStableFrames: 0,
+}
 const meterStats = {
   rms: 0,
   peak: 0,
@@ -74,6 +87,110 @@ function updateButtons(): void {
   const hasDevice = ui.deviceSelect.options.length > 0 && ui.deviceSelect.value.length > 0
   ui.startButton.disabled = activeSession !== null || !hasDevice
   ui.stopButton.disabled = activeSession === null
+}
+
+function formatMidiNoteLabel(midiNote: number): string {
+  const normalized = Math.round(midiNote)
+  const noteName = NOTE_NAMES[((normalized % 12) + 12) % 12]
+  const octave = Math.floor(normalized / 12) - 1
+  return `${noteName}${octave}`
+}
+
+function resetPitchTracking(): void {
+  pitchTracking.activeMidiNote = null
+  pitchTracking.candidateMidiNote = null
+  pitchTracking.candidateStableFrames = 0
+  pitchTracking.offStableFrames = 0
+}
+
+function resetPitchDebugPanel(): void {
+  resetPitchTracking()
+  ui.pitchF0HzValue.textContent = '-'
+  ui.pitchMidiNoteValue.textContent = '-'
+  ui.pitchCentsErrorValue.textContent = '-'
+  ui.pitchConfidenceValue.textContent = '0.00'
+  ui.pitchNoteTrackingStateValue.textContent = 'off'
+}
+
+function updatePitchDebugPanel(pitch: AudioPitchState): void {
+  ui.pitchF0HzValue.textContent = pitch.f0Hz === null ? '-' : `${pitch.f0Hz.toFixed(2)} Hz`
+  ui.pitchMidiNoteValue.textContent =
+    pitch.midiNote === null ? '-' : `${formatMidiNoteLabel(pitch.midiNote)} (${Math.round(pitch.midiNote)})`
+  ui.pitchCentsErrorValue.textContent =
+    pitch.centsError === null ? '-' : `${pitch.centsError.toFixed(1)} cents`
+  ui.pitchConfidenceValue.textContent = pitch.confidence.toFixed(2)
+}
+
+function updatePitchTrackingState(pitch: AudioPitchState): void {
+  const midiNote = pitch.midiNote
+  const confidence = pitch.confidence
+
+  if (midiNote === null || confidence < PITCH_OFF_CONFIDENCE) {
+    pitchTracking.candidateMidiNote = null
+    pitchTracking.candidateStableFrames = 0
+
+    if (pitchTracking.activeMidiNote !== null) {
+      pitchTracking.offStableFrames += 1
+      if (pitchTracking.offStableFrames >= NOTE_OFF_STABLE_FRAMES) {
+        pitchTracking.activeMidiNote = null
+        pitchTracking.offStableFrames = 0
+      }
+    } else {
+      pitchTracking.offStableFrames = 0
+    }
+
+    ui.pitchNoteTrackingStateValue.textContent =
+      pitchTracking.activeMidiNote === null
+        ? 'off'
+        : `release-hold ${formatMidiNoteLabel(pitchTracking.activeMidiNote)}`
+    return
+  }
+
+  pitchTracking.offStableFrames = 0
+  if (pitchTracking.candidateMidiNote === midiNote) {
+    pitchTracking.candidateStableFrames += 1
+  } else {
+    pitchTracking.candidateMidiNote = midiNote
+    pitchTracking.candidateStableFrames = 1
+  }
+
+  if (pitchTracking.activeMidiNote === null) {
+    if (
+      confidence >= PITCH_ON_CONFIDENCE &&
+      pitchTracking.candidateStableFrames >= NOTE_ON_STABLE_FRAMES
+    ) {
+      pitchTracking.activeMidiNote = midiNote
+      ui.pitchNoteTrackingStateValue.textContent = `note on ${formatMidiNoteLabel(midiNote)}`
+      return
+    }
+
+    ui.pitchNoteTrackingStateValue.textContent = `arming ${formatMidiNoteLabel(midiNote)}`
+    return
+  }
+
+  const semitoneDelta = Math.abs(midiNote - pitchTracking.activeMidiNote)
+  if (semitoneDelta <= NOTE_CHANGE_SEMITONE_TOLERANCE) {
+    ui.pitchNoteTrackingStateValue.textContent =
+      `note on ${formatMidiNoteLabel(pitchTracking.activeMidiNote)}`
+    return
+  }
+
+  if (
+    confidence >= PITCH_ON_CONFIDENCE &&
+    pitchTracking.candidateStableFrames >= NOTE_ON_STABLE_FRAMES
+  ) {
+    pitchTracking.activeMidiNote = midiNote
+    ui.pitchNoteTrackingStateValue.textContent = `note on ${formatMidiNoteLabel(midiNote)}`
+    return
+  }
+
+  ui.pitchNoteTrackingStateValue.textContent =
+    `transition ${formatMidiNoteLabel(pitchTracking.activeMidiNote)} -> ${formatMidiNoteLabel(midiNote)}`
+}
+
+function onPitchState(pitch: AudioPitchState): void {
+  updatePitchDebugPanel(pitch)
+  updatePitchTrackingState(pitch)
 }
 
 function resetTelemetry(): void {
@@ -174,7 +291,11 @@ async function startCapture(): Promise<void> {
   ui.statusValue.textContent = 'ストリーム開始中...'
   try {
     resetLevelMeter()
-    activeSession = await startAudioCapture(ui.deviceSelect.value, { onLevel: onMeterLevel })
+    resetPitchDebugPanel()
+    activeSession = await startAudioCapture(ui.deviceSelect.value, {
+      onLevel: onMeterLevel,
+      onPitch: onPitchState,
+    })
     ui.statusValue.textContent = 'ストリーム稼働中（AudioWorklet Meter 有効）'
     ui.sampleRateValue.textContent = `${activeSession.telemetry.sampleRateHz} Hz`
     ui.channelCountValue.textContent = `${activeSession.telemetry.channelCount ?? 'n/a'}`
@@ -191,6 +312,7 @@ async function startCapture(): Promise<void> {
     ui.statusValue.textContent = `開始失敗: ${formatErrorMessage(error)}`
     resetTelemetry()
     resetLevelMeter()
+    resetPitchDebugPanel()
     updateButtons()
   }
 }
@@ -205,6 +327,7 @@ async function stopCapture(): Promise<void> {
   ui.statusValue.textContent = 'ストリーム停止'
   resetTelemetry()
   resetLevelMeter()
+  resetPitchDebugPanel()
   updateButtons()
 }
 
@@ -254,6 +377,7 @@ window.addEventListener('beforeunload', () => {
 
 resetTelemetry()
 resetLevelMeter()
+resetPitchDebugPanel()
 laneScroller.setSpeedMultiplier(parseLaneSpeedMultiplier())
 updateLaneStatus()
 laneScroller.renderNow()

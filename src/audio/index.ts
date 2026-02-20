@@ -15,8 +15,16 @@ export interface AudioLevelState {
   peak: number
 }
 
+export interface AudioPitchState {
+  f0Hz: number | null
+  midiNote: number | null
+  centsError: number | null
+  confidence: number
+}
+
 export interface AudioCaptureOptions {
   onLevel?: (level: AudioLevelState) => void
+  onPitch?: (pitch: AudioPitchState) => void
 }
 
 export interface AudioCaptureSession {
@@ -27,6 +35,7 @@ export interface AudioCaptureSession {
   telemetry: AudioTelemetry
   constraints: AudioConstraintsState
   level: AudioLevelState
+  pitch: AudioPitchState
   stop: () => Promise<void>
 }
 
@@ -36,12 +45,24 @@ const REQUESTED_CONSTRAINTS: MediaTrackConstraints = {
   autoGainControl: false,
 }
 const LEVEL_METER_PROCESSOR_NAME = 'rifflane-level-meter'
+const YIN_PITCH_PROCESSOR_NAME = 'rifflane-yin-pitch'
 const LEVEL_METER_MODULE_URL = new URL('./level-meter-processor.js', import.meta.url).href
+const YIN_PITCH_MODULE_URL = new URL('./yin-pitch-processor.js', import.meta.url).href
+const YIN_MIN_FREQUENCY_HZ = 35
+const YIN_MAX_FREQUENCY_HZ = 200
 
 interface LevelMeterMessage {
   type: 'level'
   rms: number
   peak: number
+}
+
+interface YinPitchMessage {
+  type: 'pitch'
+  f0Hz: number | null
+  midiNote: number | null
+  centsError: number | null
+  confidence: number
 }
 
 function assertMediaDevices(): void {
@@ -54,6 +75,14 @@ function readBool(value: unknown): boolean | null {
   return typeof value === 'boolean' ? value : null
 }
 
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value)
+}
+
+function isNullableFiniteNumber(value: unknown): value is number | null {
+  return value === null || isFiniteNumber(value)
+}
+
 function isLevelMeterMessage(data: unknown): data is LevelMeterMessage {
   if (typeof data !== 'object' || data === null) {
     return false
@@ -62,10 +91,23 @@ function isLevelMeterMessage(data: unknown): data is LevelMeterMessage {
   const message = data as Partial<LevelMeterMessage>
   return (
     message.type === 'level' &&
-    typeof message.rms === 'number' &&
-    Number.isFinite(message.rms) &&
-    typeof message.peak === 'number' &&
-    Number.isFinite(message.peak)
+    isFiniteNumber(message.rms) &&
+    isFiniteNumber(message.peak)
+  )
+}
+
+function isYinPitchMessage(data: unknown): data is YinPitchMessage {
+  if (typeof data !== 'object' || data === null) {
+    return false
+  }
+
+  const message = data as Partial<YinPitchMessage>
+  return (
+    message.type === 'pitch' &&
+    isNullableFiniteNumber(message.f0Hz) &&
+    isNullableFiniteNumber(message.midiNote) &&
+    isNullableFiniteNumber(message.centsError) &&
+    isFiniteNumber(message.confidence)
   )
 }
 
@@ -81,7 +123,7 @@ function disconnectAudioNode(node: AudioNode | null): void {
   }
 }
 
-function closeLevelMeterPort(node: AudioWorkletNode | null): void {
+function closeWorkletPort(node: AudioWorkletNode | null): void {
   if (!node) {
     return
   }
@@ -103,11 +145,14 @@ async function releaseCaptureResources(
   context: AudioContext,
   source: MediaStreamAudioSourceNode | null,
   levelMeterNode: AudioWorkletNode | null,
+  pitchNode: AudioWorkletNode | null,
   sinkGainNode: GainNode | null,
 ): Promise<void> {
-  closeLevelMeterPort(levelMeterNode)
+  closeWorkletPort(levelMeterNode)
+  closeWorkletPort(pitchNode)
   disconnectAudioNode(source)
   disconnectAudioNode(levelMeterNode)
+  disconnectAudioNode(pitchNode)
   disconnectAudioNode(sinkGainNode)
   stopStreamTracks(stream)
 
@@ -143,6 +188,7 @@ export async function startAudioCapture(
   const context = new AudioContext()
   let source: MediaStreamAudioSourceNode | null = null
   let levelMeterNode: AudioWorkletNode | null = null
+  let pitchNode: AudioWorkletNode | null = null
   let sinkGainNode: GainNode | null = null
 
   try {
@@ -171,21 +217,41 @@ export async function startAudioCapture(
       throw new Error('AudioWorkletNode is not available in this browser')
     }
 
-    await context.audioWorklet.addModule(LEVEL_METER_MODULE_URL)
+    await Promise.all([
+      context.audioWorklet.addModule(LEVEL_METER_MODULE_URL),
+      context.audioWorklet.addModule(YIN_PITCH_MODULE_URL),
+    ])
     levelMeterNode = new AudioWorkletNode(context, LEVEL_METER_PROCESSOR_NAME, {
       numberOfInputs: 1,
       numberOfOutputs: 1,
       outputChannelCount: [1],
     })
+    pitchNode = new AudioWorkletNode(context, YIN_PITCH_PROCESSOR_NAME, {
+      numberOfInputs: 1,
+      numberOfOutputs: 1,
+      outputChannelCount: [1],
+      processorOptions: {
+        minFrequencyHz: YIN_MIN_FREQUENCY_HZ,
+        maxFrequencyHz: YIN_MAX_FREQUENCY_HZ,
+      },
+    })
     sinkGainNode = context.createGain()
     sinkGainNode.gain.value = 0
     source.connect(levelMeterNode)
+    source.connect(pitchNode)
     levelMeterNode.connect(sinkGainNode)
+    pitchNode.connect(sinkGainNode)
     sinkGainNode.connect(context.destination)
 
     const level: AudioLevelState = {
       rms: 0,
       peak: 0,
+    }
+    const pitch: AudioPitchState = {
+      f0Hz: null,
+      midiNote: null,
+      centsError: null,
+      confidence: 0,
     }
 
     levelMeterNode.port.onmessage = (event: MessageEvent<unknown>) => {
@@ -197,6 +263,17 @@ export async function startAudioCapture(
       level.peak = event.data.peak
       options.onLevel?.({ ...level })
     }
+    pitchNode.port.onmessage = (event: MessageEvent<unknown>) => {
+      if (!isYinPitchMessage(event.data)) {
+        return
+      }
+
+      pitch.f0Hz = event.data.f0Hz
+      pitch.midiNote = event.data.midiNote
+      pitch.centsError = event.data.centsError
+      pitch.confidence = event.data.confidence
+      options.onPitch?.({ ...pitch })
+    }
 
     if (context.state === 'suspended') {
       await context.resume()
@@ -205,7 +282,14 @@ export async function startAudioCapture(
     let stopPromise: Promise<void> | null = null
     const stop = (): Promise<void> => {
       if (!stopPromise) {
-        stopPromise = releaseCaptureResources(stream, context, source, levelMeterNode, sinkGainNode)
+        stopPromise = releaseCaptureResources(
+          stream,
+          context,
+          source,
+          levelMeterNode,
+          pitchNode,
+          sinkGainNode,
+        )
       }
       return stopPromise
     }
@@ -218,11 +302,12 @@ export async function startAudioCapture(
       telemetry,
       constraints: constraintsState,
       level,
+      pitch,
       stop,
     }
   } catch (error) {
     try {
-      await releaseCaptureResources(stream, context, source, levelMeterNode, sinkGainNode)
+      await releaseCaptureResources(stream, context, source, levelMeterNode, pitchNode, sinkGainNode)
     } catch {
       // Ignore cleanup failures and preserve the original startup error.
     }

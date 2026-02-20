@@ -22,6 +22,14 @@ export interface AppShellRefs {
   pitchCentsErrorValue: HTMLElement
   pitchConfidenceValue: HTMLElement
   pitchNoteTrackingStateValue: HTMLElement
+  latestJudgmentValue: HTMLElement
+  statsPerfectValue: HTMLElement
+  statsGoodValue: HTMLElement
+  statsMissValue: HTMLElement
+  statsAccuracyValue: HTMLElement
+  resetStatsButton: HTMLButtonElement
+  latencyOffsetSlider: HTMLInputElement
+  latencyOffsetValue: HTMLElement
   laneCanvas: HTMLCanvasElement
   laneStartButton: HTMLButtonElement
   laneStopButton: HTMLButtonElement
@@ -63,11 +71,27 @@ function formatUpdateHz(updateHz: number): string {
   return updateHz.toFixed(1)
 }
 
+function clampLatencyOffsetMs(offsetMs: number): number {
+  if (!Number.isFinite(offsetMs)) {
+    return 0
+  }
+  return Math.max(-150, Math.min(150, Math.round(offsetMs)))
+}
+
+function formatLatencyOffsetMs(offsetMs: number): string {
+  const normalized = clampLatencyOffsetMs(offsetMs)
+  if (normalized > 0) {
+    return `+${normalized}ms`
+  }
+  return `${normalized}ms`
+}
+
 export function renderAppShell(root: HTMLElement, model: AppShellModel): AppShellRefs {
+  const initialLatencyOffsetMs = clampLatencyOffsetMs(model.latencyOffsetMs)
   root.innerHTML = `
     <section class="app-shell">
       <h1>Rifflane MVP Bootstrap</h1>
-      <p>Issue #2/#3 完了。Issue #4/#5/#6/#7 の統合検証UI。</p>
+      <p>Issue #2/#3 完了。Issue #4/#5/#6/#7/#8/#9 の統合検証UI。</p>
       <div class="status-grid">
         <div class="status-card">
           <strong>Chart</strong>
@@ -78,8 +102,8 @@ export function renderAppShell(root: HTMLElement, model: AppShellModel): AppShel
           <span>${model.timingWindowMs}ms / ${model.pitchWindowCents} cents</span>
         </div>
         <div class="status-card">
-          <strong>Latency Offset</strong>
-          <span>${model.latencyOffsetMs}ms</span>
+          <strong>Latency Offset Range</strong>
+          <span>-150ms to +150ms</span>
         </div>
       </div>
 
@@ -159,6 +183,46 @@ export function renderAppShell(root: HTMLElement, model: AppShellModel): AppShel
         </div>
       </div>
 
+      <div class="scoring-panel">
+        <div class="status-card latest-judgment-card">
+          <strong>Latest Judgment</strong>
+          <span class="judgment-badge" data-role="latest-judgment-value">-</span>
+        </div>
+        <div class="score-stats-grid">
+          <div class="status-card score-stat-card">
+            <strong>Perfect</strong>
+            <span class="score-stat-value" data-role="stats-perfect-value">0</span>
+          </div>
+          <div class="status-card score-stat-card">
+            <strong>Good</strong>
+            <span class="score-stat-value" data-role="stats-good-value">0</span>
+          </div>
+          <div class="status-card score-stat-card">
+            <strong>Miss</strong>
+            <span class="score-stat-value" data-role="stats-miss-value">0</span>
+          </div>
+          <div class="status-card score-stat-card">
+            <strong>Accuracy</strong>
+            <span class="score-stat-value" data-role="stats-accuracy-value">0.0%</span>
+          </div>
+        </div>
+        <div class="scoring-controls">
+          <button type="button" data-role="stats-reset">reset stats</button>
+          <label for="latency-offset-ms">latency offset</label>
+          <input
+            id="latency-offset-ms"
+            type="range"
+            min="-150"
+            max="150"
+            step="1"
+            value="${initialLatencyOffsetMs}"
+            data-role="latency-offset-slider"
+            aria-label="latency offset in milliseconds"
+          />
+          <span class="latency-offset-value" data-role="latency-offset-value">${formatLatencyOffsetMs(initialLatencyOffsetMs)}</span>
+        </div>
+      </div>
+
       <div class="lane-panel">
         <div class="status-card lane-canvas-card">
           <strong>4-string Lane</strong>
@@ -235,6 +299,14 @@ export function renderAppShell(root: HTMLElement, model: AppShellModel): AppShel
       root,
       '[data-role="pitch-note-tracking-state-value"]',
     ),
+    latestJudgmentValue: queryRequired<HTMLElement>(root, '[data-role="latest-judgment-value"]'),
+    statsPerfectValue: queryRequired<HTMLElement>(root, '[data-role="stats-perfect-value"]'),
+    statsGoodValue: queryRequired<HTMLElement>(root, '[data-role="stats-good-value"]'),
+    statsMissValue: queryRequired<HTMLElement>(root, '[data-role="stats-miss-value"]'),
+    statsAccuracyValue: queryRequired<HTMLElement>(root, '[data-role="stats-accuracy-value"]'),
+    resetStatsButton: queryRequired<HTMLButtonElement>(root, '[data-role="stats-reset"]'),
+    latencyOffsetSlider: queryRequired<HTMLInputElement>(root, '[data-role="latency-offset-slider"]'),
+    latencyOffsetValue: queryRequired<HTMLElement>(root, '[data-role="latency-offset-value"]'),
     laneCanvas: queryRequired<HTMLCanvasElement>(root, '[data-role="lane-canvas"]'),
     laneStartButton: queryRequired<HTMLButtonElement>(root, '[data-role="lane-start"]'),
     laneStopButton: queryRequired<HTMLButtonElement>(root, '[data-role="lane-stop"]'),

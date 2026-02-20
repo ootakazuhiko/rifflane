@@ -8,7 +8,15 @@ import {
   type AudioPitchState,
 } from './audio'
 import { createDummyChart } from './chart'
-import { createScoringConfig } from './scoring'
+import {
+  LoopScoringEngine,
+  createLoopScoringChartFromLaneScrollerChart,
+  createScoringConfig,
+  loadLatencyOffsetMs,
+  saveLatencyOffsetMs,
+  type ScoringEvent,
+  type ScoringJudgement,
+} from './scoring'
 import { renderAppShell } from './ui'
 import { LaneScroller, createDummyLaneScrollerChart } from './ui/lane-scroller'
 
@@ -18,40 +26,64 @@ if (!appRoot) {
 }
 
 const chart = createDummyChart()
-const scoring = createScoringConfig()
+const laneChart = createDummyLaneScrollerChart()
+
+const baseScoringConfig = createScoringConfig()
+const initialLatencyOffsetMs = clampLatencyOffsetMs(
+  loadLatencyOffsetMs({
+    fallbackMs: baseScoringConfig.latencyOffsetMs,
+  }),
+)
+const scoringConfig = createScoringConfig({
+  ...baseScoringConfig,
+  latencyOffsetMs: initialLatencyOffsetMs,
+})
+
 const noteCount = chart.notes.length
 const maxFret = chart.notes.reduce((max, note) => Math.max(max, note.fret), 0)
 const ui = renderAppShell(appRoot, {
   noteCount,
   maxFret,
   bpm: chart.bpm,
-  timingWindowMs: scoring.timingWindowMs,
-  pitchWindowCents: scoring.pitchWindowCents,
-  latencyOffsetMs: scoring.latencyOffsetMs,
+  timingWindowMs: scoringConfig.timingWindowMs,
+  pitchWindowCents: scoringConfig.pitchWindowCents,
+  latencyOffsetMs: scoringConfig.latencyOffsetMs,
 })
+
 const laneScroller = new LaneScroller({
   canvas: ui.laneCanvas,
-  chart: createDummyLaneScrollerChart(),
+  chart: laneChart,
   speedMultiplier: 1,
   onFpsSample: (sample) => {
     ui.laneFpsValue.textContent = sample.fps.toFixed(1)
   },
 })
+
+const scoringEngine = new LoopScoringEngine({
+  chart: createLoopScoringChartFromLaneScrollerChart(laneChart),
+  config: scoringConfig,
+})
+
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
 const PITCH_ON_CONFIDENCE = 0.82
 const PITCH_OFF_CONFIDENCE = 0.55
 const NOTE_ON_STABLE_FRAMES = 2
 const NOTE_OFF_STABLE_FRAMES = 3
 const NOTE_CHANGE_SEMITONE_TOLERANCE = 0.8
+const LATENCY_OFFSET_MIN_MS = -150
+const LATENCY_OFFSET_MAX_MS = 150
 
 let activeSession: AudioCaptureSession | null = null
 let meterRenderFrameId: number | null = null
+let scoringFrameId: number | null = null
+
 const pitchTracking = {
   activeMidiNote: null as number | null,
   candidateMidiNote: null as number | null,
   candidateStableFrames: 0,
   offStableFrames: 0,
 }
+
 const meterStats = {
   rms: 0,
   peak: 0,
@@ -60,11 +92,33 @@ const meterStats = {
   windowStartedAtMs: performance.now(),
 }
 
+const transportClock = {
+  loopIndex: 0,
+  previousPlayheadMs: laneScroller.getPlayheadMs(),
+  absolutePlayheadMs: laneScroller.getPlayheadMs(),
+}
+
 function formatErrorMessage(error: unknown): string {
   if (error instanceof Error) {
     return error.message
   }
   return 'Unknown error'
+}
+
+function clampLatencyOffsetMs(offsetMs: number): number {
+  if (!Number.isFinite(offsetMs)) {
+    return 0
+  }
+  const roundedOffsetMs = Math.round(offsetMs)
+  return Math.max(LATENCY_OFFSET_MIN_MS, Math.min(LATENCY_OFFSET_MAX_MS, roundedOffsetMs))
+}
+
+function formatLatencyOffsetMs(offsetMs: number): string {
+  const normalizedOffsetMs = clampLatencyOffsetMs(offsetMs)
+  if (normalizedOffsetMs > 0) {
+    return `+${normalizedOffsetMs}ms`
+  }
+  return `${normalizedOffsetMs}ms`
 }
 
 function parseLaneSpeedMultiplier(): number {
@@ -87,6 +141,20 @@ function updateButtons(): void {
   const hasDevice = ui.deviceSelect.options.length > 0 && ui.deviceSelect.value.length > 0
   ui.startButton.disabled = activeSession !== null || !hasDevice
   ui.stopButton.disabled = activeSession === null
+}
+
+function updateTransportClock(): number {
+  const currentPlayheadMs = laneScroller.getPlayheadMs()
+  const wrapThresholdMs = laneChart.loopDurationMs * 0.5
+
+  if (currentPlayheadMs + wrapThresholdMs < transportClock.previousPlayheadMs) {
+    transportClock.loopIndex += 1
+  }
+
+  transportClock.previousPlayheadMs = currentPlayheadMs
+  transportClock.absolutePlayheadMs =
+    transportClock.loopIndex * laneChart.loopDurationMs + currentPlayheadMs
+  return transportClock.absolutePlayheadMs
 }
 
 function formatMidiNoteLabel(midiNote: number): string {
@@ -188,9 +256,109 @@ function updatePitchTrackingState(pitch: AudioPitchState): void {
     `transition ${formatMidiNoteLabel(pitchTracking.activeMidiNote)} -> ${formatMidiNoteLabel(midiNote)}`
 }
 
+function setLatestJudgementBadge(judgement: ScoringJudgement | null): void {
+  if (judgement === null) {
+    ui.latestJudgmentValue.textContent = '-'
+    ui.latestJudgmentValue.dataset.judgement = 'none'
+    return
+  }
+
+  ui.latestJudgmentValue.textContent = judgement
+  ui.latestJudgmentValue.dataset.judgement = judgement.toLowerCase()
+}
+
+function updateScoringStatsView(): void {
+  const stats = scoringEngine.getStats()
+  ui.statsPerfectValue.textContent = String(stats.perfect)
+  ui.statsGoodValue.textContent = String(stats.good)
+  ui.statsMissValue.textContent = String(stats.miss)
+  ui.statsAccuracyValue.textContent = `${(stats.accuracy * 100).toFixed(1)}%`
+}
+
+function handleScoringEvents(events: readonly ScoringEvent[]): void {
+  if (events.length === 0) {
+    return
+  }
+
+  const latestEvent = events[events.length - 1]
+  setLatestJudgementBadge(latestEvent.judgement)
+  updateScoringStatsView()
+}
+
+function resetScoringView(): void {
+  setLatestJudgementBadge(null)
+  updateScoringStatsView()
+}
+
+function toPitchCents(pitch: AudioPitchState): number | null {
+  if (pitch.midiNote === null || pitch.centsError === null) {
+    return null
+  }
+  return pitch.midiNote * 100 + pitch.centsError
+}
+
+function applyLatencyOffset(offsetMs: number, persist: boolean): void {
+  const normalizedOffsetMs = clampLatencyOffsetMs(offsetMs)
+  scoringEngine.setLatencyOffsetMs(normalizedOffsetMs)
+  ui.latencyOffsetSlider.value = String(normalizedOffsetMs)
+  ui.latencyOffsetValue.textContent = formatLatencyOffsetMs(normalizedOffsetMs)
+
+  if (persist) {
+    saveLatencyOffsetMs(normalizedOffsetMs)
+  }
+}
+
+function stopScoringLoop(): void {
+  if (scoringFrameId === null) {
+    return
+  }
+  window.cancelAnimationFrame(scoringFrameId)
+  scoringFrameId = null
+}
+
+function scoringFrame(): void {
+  scoringFrameId = null
+  if (!laneScroller.isRunning()) {
+    return
+  }
+
+  const evaluatedAtMs = updateTransportClock()
+  const events = scoringEngine.advance(evaluatedAtMs)
+  handleScoringEvents(events)
+
+  scoringFrameId = window.requestAnimationFrame(scoringFrame)
+}
+
+function startScoringLoop(): void {
+  if (scoringFrameId !== null) {
+    return
+  }
+  scoringFrameId = window.requestAnimationFrame(scoringFrame)
+}
+
 function onPitchState(pitch: AudioPitchState): void {
   updatePitchDebugPanel(pitch)
   updatePitchTrackingState(pitch)
+
+  if (!laneScroller.isRunning()) {
+    return
+  }
+
+  if (pitch.confidence < PITCH_OFF_CONFIDENCE) {
+    return
+  }
+
+  const pitchCents = toPitchCents(pitch)
+  if (pitchCents === null) {
+    return
+  }
+
+  const evaluatedAtMs = updateTransportClock()
+  const events = scoringEngine.evaluate({
+    evaluatedAtMs,
+    pitchCents,
+  })
+  handleScoringEvents(events)
 }
 
 function resetTelemetry(): void {
@@ -296,7 +464,7 @@ async function startCapture(): Promise<void> {
       onLevel: onMeterLevel,
       onPitch: onPitchState,
     })
-    ui.statusValue.textContent = 'ストリーム稼働中（AudioWorklet Meter 有効）'
+    ui.statusValue.textContent = 'ストリーム稼働中（AudioWorklet Meter + Pitch 有効）'
     ui.sampleRateValue.textContent = `${activeSession.telemetry.sampleRateHz} Hz`
     ui.channelCountValue.textContent = `${activeSession.telemetry.channelCount ?? 'n/a'}`
     ui.baseLatencyValue.textContent =
@@ -343,13 +511,26 @@ ui.stopButton.addEventListener('click', () => {
   void stopCapture()
 })
 
+ui.resetStatsButton.addEventListener('click', () => {
+  scoringEngine.resetStats()
+  resetScoringView()
+})
+
+ui.latencyOffsetSlider.addEventListener('input', () => {
+  const offsetMs = Number(ui.latencyOffsetSlider.value)
+  applyLatencyOffset(offsetMs, true)
+})
+
 ui.laneStartButton.addEventListener('click', () => {
   laneScroller.start()
+  updateTransportClock()
+  startScoringLoop()
   updateLaneStatus()
 })
 
 ui.laneStopButton.addEventListener('click', () => {
   laneScroller.stop()
+  stopScoringLoop()
   ui.laneFpsValue.textContent = '0.0'
   updateLaneStatus()
 })
@@ -365,10 +546,13 @@ window.addEventListener('resize', () => {
 
 window.addEventListener('beforeunload', () => {
   laneScroller.dispose()
+  stopScoringLoop()
+
   if (meterRenderFrameId !== null) {
     window.cancelAnimationFrame(meterRenderFrameId)
     meterRenderFrameId = null
   }
+
   if (!activeSession) {
     return
   }
@@ -378,7 +562,10 @@ window.addEventListener('beforeunload', () => {
 resetTelemetry()
 resetLevelMeter()
 resetPitchDebugPanel()
+resetScoringView()
+applyLatencyOffset(initialLatencyOffsetMs, false)
 laneScroller.setSpeedMultiplier(parseLaneSpeedMultiplier())
+updateTransportClock()
 updateLaneStatus()
 laneScroller.renderNow()
 updateButtons()

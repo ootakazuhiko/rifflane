@@ -9,6 +9,7 @@ import {
 import { createDummyChart } from './chart'
 import { createScoringConfig } from './scoring'
 import { renderAppShell } from './ui'
+import { LaneScroller, createDummyLaneScrollerChart } from './ui/lane-scroller'
 
 const appRoot = document.querySelector<HTMLDivElement>('#app')
 if (!appRoot) {
@@ -27,6 +28,14 @@ const ui = renderAppShell(appRoot, {
   pitchWindowCents: scoring.pitchWindowCents,
   latencyOffsetMs: scoring.latencyOffsetMs,
 })
+const laneScroller = new LaneScroller({
+  canvas: ui.laneCanvas,
+  chart: createDummyLaneScrollerChart(),
+  speedMultiplier: 1,
+  onFpsSample: (sample) => {
+    ui.laneFpsValue.textContent = sample.fps.toFixed(1)
+  },
+})
 
 let activeSession: AudioCaptureSession | null = null
 let meterRenderFrameId: number | null = null
@@ -43,6 +52,22 @@ function formatErrorMessage(error: unknown): string {
     return error.message
   }
   return 'Unknown error'
+}
+
+function parseLaneSpeedMultiplier(): number {
+  const value = Number(ui.laneSpeedSelect.value)
+  if (!Number.isFinite(value) || value <= 0) {
+    return 1
+  }
+  return value
+}
+
+function updateLaneStatus(): void {
+  const speed = laneScroller.getSpeedMultiplier().toFixed(2)
+  const running = laneScroller.isRunning()
+  ui.laneStateValue.textContent = running ? `playing (${speed}x)` : `stopped (${speed}x)`
+  ui.laneStartButton.disabled = running
+  ui.laneStopButton.disabled = !running
 }
 
 function updateButtons(): void {
@@ -195,7 +220,28 @@ ui.stopButton.addEventListener('click', () => {
   void stopCapture()
 })
 
+ui.laneStartButton.addEventListener('click', () => {
+  laneScroller.start()
+  updateLaneStatus()
+})
+
+ui.laneStopButton.addEventListener('click', () => {
+  laneScroller.stop()
+  ui.laneFpsValue.textContent = '0.0'
+  updateLaneStatus()
+})
+
+ui.laneSpeedSelect.addEventListener('change', () => {
+  laneScroller.setSpeedMultiplier(parseLaneSpeedMultiplier())
+  updateLaneStatus()
+})
+
+window.addEventListener('resize', () => {
+  laneScroller.renderNow()
+})
+
 window.addEventListener('beforeunload', () => {
+  laneScroller.dispose()
   if (meterRenderFrameId !== null) {
     window.cancelAnimationFrame(meterRenderFrameId)
     meterRenderFrameId = null
@@ -208,5 +254,8 @@ window.addEventListener('beforeunload', () => {
 
 resetTelemetry()
 resetLevelMeter()
+laneScroller.setSpeedMultiplier(parseLaneSpeedMultiplier())
+updateLaneStatus()
+laneScroller.renderNow()
 updateButtons()
 void refreshDevices()

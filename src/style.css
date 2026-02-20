@@ -69,6 +69,12 @@ body {
   padding-top: 16px;
 }
 
+.lane-panel {
+  margin-top: 18px;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 16px;
+}
+
 .audio-controls {
   display: grid;
   grid-template-columns: 1.3fr 2fr 1fr 1fr;
@@ -166,9 +172,77 @@ body {
   color: #0f172a;
 }
 
+.lane-canvas-card {
+  margin-bottom: 12px;
+}
+
+.lane-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin-top: 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
+}
+
+.lane-controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto 1fr;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.lane-controls button,
+.lane-controls select {
+  min-height: 38px;
+  border: 1px solid #94a3b8;
+  border-radius: 8px;
+  padding: 0 10px;
+  background: #ffffff;
+  font: inherit;
+  color: #0f172a;
+}
+
+.lane-controls button {
+  cursor: pointer;
+}
+
+.lane-controls button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.lane-controls label {
+  color: #334155;
+  font-size: 0.88rem;
+  font-weight: 600;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.lane-status-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+
+[data-role="lane-fps-value"] {
+  font-variant-numeric: tabular-nums;
+}
+
 @media (max-width: 720px) {
   .audio-controls {
     grid-template-columns: 1fr;
+  }
+
+  .lane-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .lane-controls label {
+    text-align: left;
   }
 
   .level-meter-row {

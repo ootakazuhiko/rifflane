@@ -17,6 +17,12 @@ export interface AppShellRefs {
   channelCountValue: HTMLElement
   baseLatencyValue: HTMLElement
   constraintsValue: HTMLElement
+  laneCanvas: HTMLCanvasElement
+  laneStartButton: HTMLButtonElement
+  laneStopButton: HTMLButtonElement
+  laneSpeedSelect: HTMLSelectElement
+  laneStateValue: HTMLElement
+  laneFpsValue: HTMLElement
   updateLevelMeter: (rmsLevel: number, peakLevel: number, updateHz: number) => void
   resetLevelMeter: () => void
 }
@@ -122,6 +128,42 @@ export function renderAppShell(root: HTMLElement, model: AppShellModel): AppShel
           </p>
         </div>
       </div>
+
+      <div class="lane-panel">
+        <div class="status-card lane-canvas-card">
+          <strong>4-string Lane</strong>
+          <canvas
+            class="lane-canvas"
+            data-role="lane-canvas"
+            width="800"
+            height="240"
+            aria-label="4-string lane display"
+          ></canvas>
+        </div>
+        <div class="lane-controls">
+          <button type="button" data-role="lane-start">start</button>
+          <button type="button" data-role="lane-stop">stop</button>
+          <label for="lane-speed-multiplier">speed multiplier</label>
+          <select id="lane-speed-multiplier" data-role="lane-speed-multiplier">
+            <option value="0.5">0.5x</option>
+            <option value="0.75">0.75x</option>
+            <option value="1" selected>1.0x</option>
+            <option value="1.25">1.25x</option>
+            <option value="1.5">1.5x</option>
+            <option value="2">2.0x</option>
+          </select>
+        </div>
+        <div class="lane-status-grid">
+          <div class="status-card">
+            <strong>状態</strong>
+            <span data-role="lane-state-value">stopped</span>
+          </div>
+          <div class="status-card">
+            <strong>FPS</strong>
+            <span><span data-role="lane-fps-value">0.0</span> fps</span>
+          </div>
+        </div>
+      </div>
     </section>
   `
 
@@ -155,6 +197,12 @@ export function renderAppShell(root: HTMLElement, model: AppShellModel): AppShel
     channelCountValue: queryRequired<HTMLElement>(root, '[data-role="channel-count-value"]'),
     baseLatencyValue: queryRequired<HTMLElement>(root, '[data-role="base-latency-value"]'),
     constraintsValue: queryRequired<HTMLElement>(root, '[data-role="constraints-value"]'),
+    laneCanvas: queryRequired<HTMLCanvasElement>(root, '[data-role="lane-canvas"]'),
+    laneStartButton: queryRequired<HTMLButtonElement>(root, '[data-role="lane-start"]'),
+    laneStopButton: queryRequired<HTMLButtonElement>(root, '[data-role="lane-stop"]'),
+    laneSpeedSelect: queryRequired<HTMLSelectElement>(root, '[data-role="lane-speed-multiplier"]'),
+    laneStateValue: queryRequired<HTMLElement>(root, '[data-role="lane-state-value"]'),
+    laneFpsValue: queryRequired<HTMLElement>(root, '[data-role="lane-fps-value"]'),
     updateLevelMeter,
     resetLevelMeter,
   }

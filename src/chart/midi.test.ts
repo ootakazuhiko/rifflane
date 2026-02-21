@@ -37,6 +37,15 @@ function createSmfArrayBufferWithoutTempo(): ArrayBuffer {
   return toArrayBuffer(midi.toArray())
 }
 
+function createSmfArrayBufferWithOutOfRangeMidiNote(): ArrayBuffer {
+  const midi = new Midi()
+  const track = midi.addTrack()
+  track.name = 'OutOfRangeMidi'
+  track.addNote({ midi: 40, time: 0, duration: 0.25 })
+  track.notes[0].midi = 128
+  return toArrayBuffer(midi.toArray())
+}
+
 describe('parseSmfFromArrayBuffer', () => {
   it('parses bpm, normalizes track metadata, and sorts notes', () => {
     const result = parseSmfFromArrayBuffer(createValidSmfArrayBuffer())
@@ -95,6 +104,16 @@ describe('parseSmfFromArrayBuffer', () => {
     }
     expect(result.error.code).toBe('SMF_PARSE_FAILED')
     expect(result.error.message).toContain('input must be an ArrayBuffer')
+  })
+
+  it('returns SMF_PARSE_FAILED when a note midi is outside 0-127', () => {
+    const result = parseSmfFromArrayBuffer(createSmfArrayBufferWithOutOfRangeMidiNote())
+    expect(result.ok).toBe(false)
+    if (result.ok) {
+      throw new Error('Expected parse failure')
+    }
+    expect(result.error.code).toBe('SMF_PARSE_FAILED')
+    expect(result.error.message).toContain('tracks[0].notes[0].midi must be in the 0-127 range.')
   })
 })
 

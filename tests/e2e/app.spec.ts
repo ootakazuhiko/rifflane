@@ -1,4 +1,7 @@
-import { expect, test, type Locator, type Page } from '@playwright/test'
+import ToneMidiModule from '@tonejs/midi'
+import { expect, test, type Locator } from '@playwright/test'
+
+const { Midi } = ToneMidiModule
 
 async function setRangeValue(slider: Locator, value: number): Promise<void> {
   await slider.evaluate((element, nextValue) => {
@@ -6,6 +9,42 @@ async function setRangeValue(slider: Locator, value: number): Promise<void> {
     input.value = String(nextValue)
     input.dispatchEvent(new Event('input', { bubbles: true }))
   }, value)
+}
+
+function createValidMidiFilePayload(fileName: string): {
+  name: string
+  mimeType: string
+  buffer: Buffer
+} {
+  const midi = new Midi()
+  midi.header.setTempo(120)
+
+  const mainTrack = midi.addTrack()
+  mainTrack.name = 'Main'
+  mainTrack.addNote({ midi: 28, time: 0, duration: 0.5 })
+  mainTrack.addNote({ midi: 33, time: 0.75, duration: 0.25 })
+
+  const alternateTrack = midi.addTrack()
+  alternateTrack.name = 'Alt'
+  alternateTrack.addNote({ midi: 40, time: 0.25, duration: 0.5 })
+
+  return {
+    name: fileName,
+    mimeType: 'audio/midi',
+    buffer: Buffer.from(midi.toArray()),
+  }
+}
+
+function createInvalidMidiFilePayload(fileName: string): {
+  name: string
+  mimeType: string
+  buffer: Buffer
+} {
+  return {
+    name: fileName,
+    mimeType: 'audio/midi',
+    buffer: Buffer.from([0x00, 0x01, 0x02, 0x03]),
+  }
 }
 
 test.describe('Rifflane e2e baseline', () => {
@@ -109,5 +148,46 @@ test.describe('Rifflane e2e baseline', () => {
     await expect(diagnosticsToggle).toBeChecked()
     await expect(diagnosticsModeValue).toHaveText('ON')
     await expect(diagnosticsPanel).toHaveAttribute('aria-hidden', 'false')
+  })
+
+  test('MIDI投入から解析成功・track選択・import完了まで検証', async ({ page }) => {
+    const midiFileInput = page.locator('[data-role="midi-file-input"]')
+    const midiTrackSelect = page.locator('[data-role="midi-track-select"]')
+    const midiImportButton = page.locator('[data-role="midi-import-run"]')
+    const midiSelectedNameValue = page.locator('[data-role="midi-selected-name-value"]')
+    const midiImportStatusValue = page.locator('[data-role="midi-import-status-value"]')
+    const payload = createValidMidiFilePayload('e2e-valid.mid')
+
+    await midiFileInput.setInputFiles(payload)
+
+    await expect(midiSelectedNameValue).toHaveText('e2e-valid.mid')
+    await expect(midiImportStatusValue).toHaveText('解析成功: 2 tracks')
+    await expect(midiTrackSelect).toBeEnabled()
+    await expect(midiTrackSelect.locator('option')).toHaveCount(3)
+    await expect(midiTrackSelect.locator('option[value="1"]')).toHaveText('#2 Alt (1 notes)')
+
+    await midiTrackSelect.selectOption('1')
+    await expect(midiTrackSelect).toHaveValue('1')
+    await expect(midiImportButton).toBeEnabled()
+
+    await midiImportButton.click()
+    await expect(midiImportStatusValue).toHaveText('import完了: #2 Alt')
+  })
+
+  test('不正MIDI投入時に解析失敗表示を検証', async ({ page }) => {
+    const midiFileInput = page.locator('[data-role="midi-file-input"]')
+    const midiTrackSelect = page.locator('[data-role="midi-track-select"]')
+    const midiImportButton = page.locator('[data-role="midi-import-run"]')
+    const midiSelectedNameValue = page.locator('[data-role="midi-selected-name-value"]')
+    const midiImportStatusValue = page.locator('[data-role="midi-import-status-value"]')
+    const payload = createInvalidMidiFilePayload('e2e-invalid.mid')
+
+    await midiFileInput.setInputFiles(payload)
+
+    await expect(midiSelectedNameValue).toHaveText('e2e-invalid.mid')
+    await expect(midiImportStatusValue).toHaveText('解析失敗: SMF_PARSE_FAILED')
+    await expect(midiTrackSelect).toBeDisabled()
+    await expect(midiTrackSelect).toHaveValue('')
+    await expect(midiImportButton).toBeDisabled()
   })
 })

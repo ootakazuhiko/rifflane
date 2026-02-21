@@ -8,7 +8,8 @@
 
 - 目的: ドメインロジックの正確性を高速に検証する。
 - 対象:
-  - `src/scoring/engine.test.ts`: 判定（`Perfect/Good/Miss`）、latency offset、auto-miss、lane filter、setChart/reset。
+  - `src/scoring/engine.test.ts`: 判定（`Perfect/Good/Miss`）、候補選択（lane filter / 候補なし / 同率時優先順位）、latency offset、auto-miss、`setChart/reset`、`updateConfig/getConfig`、異常入力ガード（chart/input）、防御分岐（`timing-window`）。
+  - `src/ui/lane-scroller.test.ts`: lane/order/chart 入力検証、`renderNow/dispose`、FPS callback、描画防御分岐（未知laneノートskip）。
   - `src/scoring/config.test.ts`: 判定窓パラメータの境界値と異常値。
   - `src/scoring/pitch.test.ts`: 開放弦定義解決、midi/cents 変換の異常値。
   - `src/scoring/adapters.test.ts`: chart/lane-scroller 変換の正常系と入力異常系。
@@ -24,6 +25,8 @@
   - lane `start/stop` と速度変更
   - latency offset slider 反映
   - diagnostics / latency offset の localStorage 永続化（reload 復元）
+  - MIDI import（正常SMF投入時の解析成功・track選択・import完了）
+  - MIDI import（不正SMF投入時の解析失敗表示）
 
 ### Manual test（実機/ブラウザ）
 
@@ -39,8 +42,13 @@
 | 区分 | シナリオ | 期待結果 |
 | --- | --- | --- |
 | Unit | 採点判定窓（perfect/good/miss） | 判定と統計（accuracy 含む）が仕様どおり更新される |
+| Unit | 候補なし（timing window 外、auto-miss未到達） | `evaluate` が空配列を返し、統計が変化しない |
+| Unit | 設定更新経路（`updateConfig/getConfig`） | 設定が即時反映され、戻り値は defensive copy として外部変更の影響を受けない |
+| Unit | chart/input 異常入力ガード | lane不正、duration負値、pitch解決不可、非有限 `evaluatedAtMs` を明示エラーで拒否する |
+| Unit | 防御分岐（`timing-window`） | 正常入力では到達しないため、内部状態破損を模擬してフォールバック判定を確認する |
 | Unit | storage/config/adapters の境界値検証 | 設定・保存・変換ロジックが異常入力で安全に失敗する |
 | Unit | MIDI parse/変換と異常系 | 正常系は lane/fret へ変換、異常系は規定エラーコードを返す |
+| Unit | MIDI note 範囲外ガード（`normalizeMidiNote`） | `tracks[*].notes[*].midi` が `0-127` 範囲外のとき `SMF_PARSE_FAILED` を返す |
 | E2E | 画面初期表示と主要UI存在確認 | 主要パネルが表示され、初期状態が崩れていない |
 | E2E | lane 操作・速度変更・slider操作 | UI状態と表示値が入力操作に追従する |
 | Manual | マイク入力から採点までの一連動作 | RMS/Pitch/判定表示が連動し、操作可能状態を維持する |
@@ -63,8 +71,10 @@
 
 Coverage スナップショット（2026-02-21）:
 - `npm run test:unit:coverage`
-- 全体: `Statements 94.93% / Branches 85.03% / Functions 94.79% / Lines 95.01%`
-- 補足: 防御的分岐（例: 不正MIDI値、到達困難なガード分岐）は一部未到達。
+- 全体: `Statements 98.95% / Branches 94.52% / Functions 98.95% / Lines 99.11%`
+- `src/ui/lane-scroller.ts`: `Statements 99.48% / Branches 91.78% / Functions 96.15% / Lines 100%`
+- `src/scoring/engine.ts`: `Statements 99.35% / Branches 98.71% / Functions 100% / Lines 99.34%`
+- 補足: `engine.ts` は `findBestCandidate` 内の source-order 再選択分岐（`src/scoring/engine.ts:399`）のみ未到達。
 
 ## E2E結果スクリーンショット
 
@@ -90,7 +100,8 @@ npm run capture:e2e-screenshots
 
 ## 既知ギャップ
 
+- `src/scoring/engine.ts:395` の「同一 occurrence かつ sourceOrder がより小さい候補へ更新」分岐は、`normalizeChart` が time/sourceOrder 昇順へ正規化する前提では通常入力で成立しない。
 - 実マイク入力・ブラウザ権限・OS依存挙動は自動テストで完全再現できないため、manual test が必須。
-- E2E は現状 UI のベースライン確認中心で、MIDI 実データ投入から採点結果までの統合シナリオは未自動化。
+- E2E は UI と MIDI import までを自動化済み。実オーディオ入力を伴う採点結果の統合検証は未自動化。
 - パフォーマンス指標（FPS、worklet 遅延、長時間安定性）の閾値判定は CI に未組み込み。
 - デバイスマトリクス（Windows/WSL2/Android 実機差分）は継続的な手動回帰に依存。

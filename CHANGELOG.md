@@ -20,6 +20,10 @@
 - `chart` 変換ロジックの unit test を拡張（`src/chart/midi.test.ts`: BPM fallback / options / 補助関数群）。
 - `engine` の追加 unit test を拡張（候補選択分岐、無効チャート入力）。
 - `lane-scroller` の unit test をさらに拡張（2D context欠如、`setTransform` 分岐、FPS callback解除）。
+- `engine` の防御分岐を対象に unit test を追加（候補なし、`updateConfig/getConfig` 経路、無効 input/chart、`timing-window` フォールバック）。
+- e2e に MIDI import 統合シナリオを追加（正常SMFのimport完了 / 不正SMFの解析失敗表示）。
+- `lane-scroller` の unit test をさらに拡張（`hitLineRatio` 検証、`dispose/renderNow`、未知laneノートskip、防御分岐）。
+- `midi` parser の unit test に MIDI note `0-127` 範囲外ガード（`SMF_PARSE_FAILED`）を追加。
 
 ### Changed
 - CI を `verify`（lint/typecheck/unit/build）と `e2e`（Playwright）へ分離。
@@ -28,6 +32,9 @@
 - e2e に `localStorage` 永続化検証（latency offset / diagnostics mode reload 復元）を追加。
 - `.gitignore` に `coverage/` を追加。
 - unit coverage を改善（全体 `Statements 94.93% / Branches 85.03% / Functions 94.79% / Lines 95.01%`）。
+- `docs/testing-guide.md` を更新し、engine 追加シナリオと到達困難分岐（`src/scoring/engine.ts:399`）の前提を明記。
+- unit coverage を改善（全体 `Statements 97.20% / Branches 91.97% / Functions 96.87% / Lines 97.33%`、`engine.ts` branch `98.71%`）。
+- unit coverage を改善（全体 `Statements 98.95% / Branches 94.52% / Functions 98.95% / Lines 99.11%`）。
 
 ## [0.1.0] - 2026-02-20
 

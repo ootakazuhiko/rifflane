@@ -228,6 +228,76 @@ describe('LaneScroller', () => {
     ).toThrow('Unsupported lane name: X')
   })
 
+  it('validates hitLineRatio range on construction', () => {
+    setupEnvironment()
+
+    expect(() =>
+      new LaneScroller({
+        canvas: createMockCanvas(),
+        chart: createChart(),
+        hitLineRatio: 0,
+      }),
+    ).toThrow('hitLineRatio must be a finite number between 0 and 1 (exclusive).')
+    expect(() =>
+      new LaneScroller({
+        canvas: createMockCanvas(),
+        chart: createChart(),
+        hitLineRatio: 1,
+      }),
+    ).toThrow('hitLineRatio must be a finite number between 0 and 1 (exclusive).')
+    expect(() =>
+      new LaneScroller({
+        canvas: createMockCanvas(),
+        chart: createChart(),
+        hitLineRatio: Number.NaN,
+      }),
+    ).toThrow('hitLineRatio must be a finite number between 0 and 1 (exclusive).')
+  })
+
+  it('uses a copy of laneOrder provided via options', () => {
+    setupEnvironment()
+    const fillText = vi.fn()
+    const { canvas } = createMockCanvasBundle({
+      context: createMockContext({ fillText }),
+    })
+    const laneOrder: LaneName[] = ['G', 'D', 'A', 'E']
+
+    const scroller = new LaneScroller({ canvas, chart: createChart(), laneOrder })
+
+    laneOrder.splice(0, laneOrder.length, 'E', 'A', 'D', 'G')
+    fillText.mockClear()
+    scroller.renderNow()
+
+    const laneLabels = fillText.mock.calls.slice(0, 4).map(([text]) => text)
+    expect(laneLabels).toEqual(['G', 'D', 'A', 'E'])
+  })
+
+  it('validates chart note fields on setChart', () => {
+    setupEnvironment()
+    const scroller = new LaneScroller({ canvas: createMockCanvas(), chart: createChart() })
+
+    expect(() =>
+      scroller.setChart({
+        loopDurationMs: 1000,
+        notes: [{ lane: 'X' as unknown as LaneName, timeMs: 0, durationMs: 120 }],
+      }),
+    ).toThrow('Unknown lane in chart: X')
+
+    expect(() =>
+      scroller.setChart({
+        loopDurationMs: 1000,
+        notes: [{ lane: 'E', timeMs: Number.NaN, durationMs: 120 }],
+      }),
+    ).toThrow('Chart note timeMs must be finite.')
+
+    expect(() =>
+      scroller.setChart({
+        loopDurationMs: 1000,
+        notes: [{ lane: 'E', timeMs: 0, durationMs: -1 }],
+      }),
+    ).toThrow('Chart note durationMs must be finite and >= 0.')
+  })
+
   it('throws when 2D context is unavailable', () => {
     setupEnvironment()
     const { canvas } = createMockCanvasBundle({ context: null })
@@ -251,6 +321,81 @@ describe('LaneScroller', () => {
     expect(setTransform).toHaveBeenCalledWith(2, 0, 0, 2, 0, 0)
     expect(canvas.width).toBe(640)
     expect(canvas.height).toBe(360)
+  })
+
+  it('stops and cancels pending animation frame when disposed', () => {
+    const { windowMock, setNowMs } = setupEnvironment()
+    const scroller = new LaneScroller({ canvas: createMockCanvas(), chart: createChart() })
+
+    setNowMs(0)
+    scroller.start()
+    expect(scroller.isRunning()).toBe(true)
+    expect(windowMock.queuedFrameCount).toBe(1)
+
+    scroller.dispose()
+    expect(scroller.isRunning()).toBe(false)
+    expect(windowMock.cancelAnimationFrame).toHaveBeenCalledTimes(1)
+    expect(windowMock.queuedFrameCount).toBe(0)
+
+    scroller.dispose()
+    expect(windowMock.cancelAnimationFrame).toHaveBeenCalledTimes(1)
+  })
+
+  it('draws one frame when renderNow is called', () => {
+    setupEnvironment()
+    const clearRect = vi.fn()
+    const { canvas } = createMockCanvasBundle({
+      context: createMockContext({ clearRect }),
+    })
+    const scroller = new LaneScroller({ canvas, chart: createChart() })
+
+    clearRect.mockClear()
+    scroller.renderNow()
+
+    expect(clearRect).toHaveBeenCalledTimes(1)
+  })
+
+  it('returns early in onAnimationFrame when not running', () => {
+    const { windowMock } = setupEnvironment()
+    const clearRect = vi.fn()
+    const { canvas } = createMockCanvasBundle({
+      context: createMockContext({ clearRect }),
+    })
+    const scroller = new LaneScroller({ canvas, chart: createChart() })
+    const internalScroller = scroller as unknown as { onAnimationFrame: () => void }
+
+    clearRect.mockClear()
+    internalScroller.onAnimationFrame()
+
+    expect(clearRect).not.toHaveBeenCalled()
+    expect(windowMock.requestAnimationFrame).not.toHaveBeenCalled()
+  })
+
+  it('skips chart notes with unknown lanes defensively during draw', () => {
+    setupEnvironment()
+    const quadraticCurveTo = vi.fn()
+    const fillText = vi.fn()
+    const { canvas } = createMockCanvasBundle({
+      context: createMockContext({ quadraticCurveTo, fillText }),
+    })
+    const scroller = new LaneScroller({
+      canvas,
+      chart: { loopDurationMs: 1000, notes: [] },
+    })
+    const internalScroller = scroller as unknown as { chart: LaneScrollerChart }
+
+    internalScroller.chart = {
+      loopDurationMs: 1000,
+      notes: [{ lane: 'X' as unknown as LaneName, timeMs: 0, durationMs: 120, fret: 9 }],
+    }
+
+    quadraticCurveTo.mockClear()
+    fillText.mockClear()
+    expect(() => scroller.renderNow()).not.toThrow()
+    expect(quadraticCurveTo).not.toHaveBeenCalled()
+
+    const renderedTexts = fillText.mock.calls.map(([text]) => text)
+    expect(renderedTexts).not.toContain('9')
   })
 
   it('emits fps samples when elapsed time reaches sample window', () => {

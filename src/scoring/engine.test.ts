@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { LoopScoringEngine } from './engine'
+import type { LoopScoringChart } from './types'
 
 const BASE_CHART = {
   loopDurationMs: 2000,
@@ -115,5 +116,157 @@ describe('LoopScoringEngine', () => {
     })
     expect(events).toHaveLength(1)
     expect(events[0].note?.loopIndex).toBe(0)
+  })
+
+  it('emits multiple auto-miss events across loop boundaries', () => {
+    const engine = createEngine()
+
+    const autoMissEvents = engine.advance(7200)
+    expect(autoMissEvents).toHaveLength(4)
+    expect(autoMissEvents.map((event) => event.note?.loopIndex)).toEqual([0, 1, 2, 3])
+    expect(autoMissEvents.every((event) => event.source === 'auto-miss')).toBe(true)
+    expect(autoMissEvents.every((event) => event.reason === 'auto-miss')).toBe(true)
+    expect(engine.getStats()).toEqual({
+      perfect: 0,
+      good: 0,
+      miss: 4,
+      total: 4,
+      accuracy: 0,
+    })
+
+    const judged = engine.evaluate({
+      evaluatedAtMs: 9000,
+      pitchCents: 2800,
+      lane: 'E',
+    })
+    expect(judged).toHaveLength(1)
+    expect(judged[0].judgement).toBe('Perfect')
+    expect(judged[0].note?.loopIndex).toBe(4)
+  })
+
+  it('marks candidate as miss when pitch input is missing', () => {
+    const engine = createEngine()
+
+    const events = engine.evaluate({
+      evaluatedAtMs: 1000,
+      pitchCents: null,
+      lane: 'E',
+    })
+    expect(events).toHaveLength(1)
+    expect(events[0]).toMatchObject({
+      judgement: 'Miss',
+      reason: 'pitch-missing',
+      source: 'input',
+      timingErrorMs: 0,
+      pitchErrorCents: null,
+    })
+    expect(engine.getStats().miss).toBe(1)
+  })
+
+  it('respects lane filter during candidate selection', () => {
+    const chart: LoopScoringChart = {
+      loopDurationMs: 2000,
+      notes: [
+        {
+          id: 'e-note',
+          lane: 'E',
+          timeMs: 1000,
+          durationMs: 120,
+          fret: 0,
+        },
+        {
+          id: 'a-note',
+          lane: 'A',
+          timeMs: 1020,
+          durationMs: 120,
+          fret: 0,
+        },
+      ],
+    }
+
+    const filteredEngine = new LoopScoringEngine({ chart })
+    const filteredEvents = filteredEngine.evaluate({
+      evaluatedAtMs: 1020,
+      pitchCents: 2800,
+      lane: 'E',
+    })
+    expect(filteredEvents).toHaveLength(1)
+    expect(filteredEvents[0].note?.id).toBe('e-note')
+    expect(filteredEvents[0].timingErrorMs).toBe(20)
+
+    const unfilteredEngine = new LoopScoringEngine({ chart })
+    const unfilteredEvents = unfilteredEngine.evaluate({
+      evaluatedAtMs: 1020,
+      pitchCents: 3300,
+    })
+    expect(unfilteredEvents).toHaveLength(1)
+    expect(unfilteredEvents[0].note?.id).toBe('a-note')
+    expect(unfilteredEvents[0].timingErrorMs).toBe(0)
+  })
+
+  it('setChart replaces notes and reset restarts loop progress for the current chart', () => {
+    const firstChart: LoopScoringChart = BASE_CHART
+    const secondChart: LoopScoringChart = {
+      loopDurationMs: 1500,
+      notes: [
+        {
+          id: 'second-a-note',
+          lane: 'A',
+          timeMs: 500,
+          durationMs: 100,
+          fret: 0,
+        },
+      ],
+    }
+
+    const engine = new LoopScoringEngine({ chart: firstChart })
+    engine.evaluate({
+      evaluatedAtMs: 1000,
+      pitchCents: 2800,
+      lane: 'E',
+    })
+    engine.evaluate({
+      evaluatedAtMs: 3000,
+      pitchCents: 2800,
+      lane: 'E',
+    })
+    expect(engine.getStats().total).toBe(2)
+
+    engine.setChart(secondChart)
+    expect(engine.getStats()).toEqual({
+      perfect: 0,
+      good: 0,
+      miss: 0,
+      total: 0,
+      accuracy: 0,
+    })
+
+    const noMatchOnOldLane = engine.evaluate({
+      evaluatedAtMs: 500,
+      pitchCents: 2800,
+      lane: 'E',
+    })
+    expect(noMatchOnOldLane).toEqual([])
+
+    const firstOnNewChart = engine.evaluate({
+      evaluatedAtMs: 500,
+      pitchCents: 3300,
+      lane: 'A',
+    })
+    expect(firstOnNewChart).toHaveLength(1)
+    expect(firstOnNewChart[0].note?.id).toBe('second-a-note')
+    expect(firstOnNewChart[0].note?.loopIndex).toBe(0)
+
+    engine.reset()
+    expect(engine.getStats().total).toBe(0)
+
+    const afterReset = engine.evaluate({
+      evaluatedAtMs: 500,
+      pitchCents: 3300,
+      lane: 'A',
+    })
+    expect(afterReset).toHaveLength(1)
+    expect(afterReset[0].note?.id).toBe('second-a-note')
+    expect(afterReset[0].note?.loopIndex).toBe(0)
   })
 })

@@ -6,6 +6,7 @@ Rifflane は、4弦ベース向けのレーン表示とリアルタイム採点�
 
 - 変更履歴: [`CHANGELOG.md`](CHANGELOG.md)
 - バージョニング方針: [`docs/versioning-policy.md`](docs/versioning-policy.md)
+- テストガイド: [`docs/testing-guide.md`](docs/testing-guide.md)
 
 ## Setup instructions
 
@@ -46,7 +47,21 @@ npm run build
 - `test:unit`: `vitest run`
 - `test:e2e`: `playwright test`
 
-2026-02-20 時点で `lint/typecheck/build` はローカル実行で通過しています。
+テスト戦略・主要シナリオ・CI 連携・既知ギャップは [`docs/testing-guide.md`](docs/testing-guide.md) を参照してください。
+
+### テスト実行（要点）
+
+```bash
+npm ci
+npm run lint && npm run typecheck
+npm run test:unit
+npm run test:e2e
+npm run build
+```
+
+- Playwright 初回実行時のみ、必要に応じて `npx playwright install --with-deps chromium` を実行してください。
+
+2026-02-21 時点で `lint/typecheck/test:unit/test:e2e/build` はローカル実行で通過しています。
 
 ## 現行実装の範囲
 
@@ -156,7 +171,7 @@ adb reverse --remove tcp:5173
 
 | ID | 環境 | 検証対象 | 手順 | 期待結果 |
 | --- | --- | --- | --- | --- |
-| M-01 | 共通（CI相当） | 静的検証 | `npm run lint && npm run typecheck && npm run build` | 全コマンド成功 |
+| M-01 | 共通（CI相当） | 自動検証一式 | `npm run lint && npm run typecheck && npm run test:unit && npm run test:e2e && npm run build` | 全コマンド成功 |
 | M-02 | Windows + Chrome/Edge | audio capture + worklet | 権限許可後に `開始` | RMS/Peak 更新、Pitch Debug 更新 |
 | M-03 | Windows + Chrome/Edge | MIDI import | `.mid/.midi` 読込、track 選択、`import` | import 成功ステータス、レーン譜面更新 |
 | M-04 | Windows + Chrome/Edge | lane/scoring | lane `start`、演奏入力 | `Latest Judgment` と統計が更新 |

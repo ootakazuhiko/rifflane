@@ -71,4 +71,43 @@ test.describe('Rifflane e2e baseline', () => {
     await expect(slider).toHaveValue('-30')
     await expect(offsetValue).toHaveText('-30ms')
   })
+
+  test('latency offset の localStorage 永続化（reload後復元）', async ({ page }) => {
+    const slider = page.locator('[data-role="latency-offset-slider"]')
+    const offsetValue = page.locator('[data-role="latency-offset-value"]')
+
+    await setRangeValue(slider, 72)
+    await expect(slider).toHaveValue('72')
+    await expect(offsetValue).toHaveText('+72ms')
+
+    await expect
+      .poll(() => page.evaluate(() => window.localStorage.getItem('rifflane.latencyOffsetMs')))
+      .toBe('72')
+
+    await page.reload()
+    await expect(page.getByRole('heading', { name: 'Rifflane MVP Bootstrap' })).toBeVisible()
+    await expect(slider).toHaveValue('72')
+    await expect(offsetValue).toHaveText('+72ms')
+  })
+
+  test('diagnostics toggle の localStorage 永続化（reload後ON継続）', async ({ page }) => {
+    const diagnosticsToggle = page.locator('[data-role="diagnostics-toggle"]')
+    const diagnosticsModeValue = page.locator('[data-role="diagnostics-mode-value"]')
+    const diagnosticsPanel = page.locator('[data-role="diagnostics-panel"]')
+
+    await diagnosticsToggle.check()
+    await expect(diagnosticsToggle).toBeChecked()
+    await expect(diagnosticsModeValue).toHaveText('ON')
+    await expect(diagnosticsPanel).toHaveAttribute('aria-hidden', 'false')
+
+    await expect
+      .poll(() => page.evaluate(() => window.localStorage.getItem('rifflane.diagnosticsMode')))
+      .toBe('1')
+
+    await page.reload()
+    await expect(page.getByRole('heading', { name: 'Rifflane MVP Bootstrap' })).toBeVisible()
+    await expect(diagnosticsToggle).toBeChecked()
+    await expect(diagnosticsModeValue).toHaveText('ON')
+    await expect(diagnosticsPanel).toHaveAttribute('aria-hidden', 'false')
+  })
 })

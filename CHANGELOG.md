@@ -12,11 +12,14 @@
 - `Playwright` による e2e test 基盤を追加（`tests/e2e/app.spec.ts`）。
 - 診断モードを追加し、lane FPS 平均・meter 更新Hz平均・AudioWorklet遅延（avg/p95）・推定遅延を表示。
 - バージョニング方針ドキュメント `docs/versioning-policy.md` を追加。
+- `scoring` 領域の追加 unit test を作成（`config/pitch/adapters/latency-offset-storage`）。
+- テスト戦略ドキュメント `docs/testing-guide.md` を追加。
 
 ### Changed
 - CI を `verify`（lint/typecheck/unit/build）と `e2e`（Playwright）へ分離。
 - `.gitignore` に `test-results` / `playwright-report` を追加。
 - `README.md` にリリース管理ドキュメント参照を追加。
+- e2e に `localStorage` 永続化検証（latency offset / diagnostics mode reload 復元）を追加。
 
 ## [0.1.0] - 2026-02-20
 

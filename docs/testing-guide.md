@@ -57,6 +57,20 @@
 
 - Playwright 初回実行時はブラウザ導入が必要な場合があります。`npx playwright install --with-deps chromium`
 - E2E は `playwright.config.ts` でローカル Web サーバ（`127.0.0.1:4173`）を自動起動します。
+- E2E 結果スクリーンショットは `npm run capture:e2e-screenshots` で生成できます。
+
+## E2E結果スクリーンショット
+
+生成コマンド:
+
+```bash
+npm run capture:e2e-screenshots
+```
+
+![E2E 01 Initial Display](./screenshots/e2e/01-initial-display.png)
+![E2E 02 Diagnostics On](./screenshots/e2e/02-diagnostics-on.png)
+![E2E 03 Latency +72ms](./screenshots/e2e/03-latency-plus-72ms.png)
+![E2E 04 Lane Playing 1.5x](./screenshots/e2e/04-lane-playing-1-5x.png)
 
 ## CI対応
 

@@ -12,7 +12,8 @@
     "test": "npm run test:unit",
     "test:unit": "vitest run",
     "test:unit:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "capture:e2e-screenshots": "node scripts/capture-e2e-screenshots.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.37.0",

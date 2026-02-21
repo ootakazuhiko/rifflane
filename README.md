@@ -48,6 +48,18 @@ npm run build
 - `test:e2e`: `playwright test`
 
 テスト戦略・主要シナリオ・CI 連携・既知ギャップは [`docs/testing-guide.md`](docs/testing-guide.md) を参照してください。
+E2E 結果スクリーンショット生成は `npm run capture:e2e-screenshots` を使用してください。
+
+## E2E結果スクリーンショット
+
+```bash
+npm run capture:e2e-screenshots
+```
+
+![E2E 01 Initial Display](docs/screenshots/e2e/01-initial-display.png)
+![E2E 02 Diagnostics On](docs/screenshots/e2e/02-diagnostics-on.png)
+![E2E 03 Latency +72ms](docs/screenshots/e2e/03-latency-plus-72ms.png)
+![E2E 04 Lane Playing 1.5x](docs/screenshots/e2e/04-lane-playing-1-5x.png)
 
 ### テスト実行（要点）
 

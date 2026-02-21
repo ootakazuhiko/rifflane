@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit",
     "test": "npm run test:unit",
     "test:unit": "vitest run",
+    "test:unit:coverage": "vitest run --coverage",
     "test:unit:watch": "vitest",
     "test:e2e": "playwright test",
     "capture:e2e-screenshots": "node scripts/capture-e2e-screenshots.mjs"
@@ -18,6 +19,7 @@
   "devDependencies": {
     "@eslint/js": "^9.37.0",
     "@playwright/test": "^1.58.2",
+    "@vitest/coverage-v8": "^4.0.18",
     "eslint": "^9.37.0",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.46.1",

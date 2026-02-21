@@ -50,14 +50,20 @@
 1. 依存関係をインストールする。`npm ci`
 2. 静的検証を実行する。`npm run lint && npm run typecheck`
 3. Unit test を実行する。`npm run test:unit`
-4. E2E test を実行する。`npm run test:e2e`
-5. ビルド検証を実行する。`npm run build`
+4. Unit coverage を実行する。`npm run test:unit:coverage`
+5. E2E test を実行する。`npm run test:e2e`
+6. ビルド検証を実行する。`npm run build`
 
 補足:
 
 - Playwright 初回実行時はブラウザ導入が必要な場合があります。`npx playwright install --with-deps chromium`
 - E2E は `playwright.config.ts` でローカル Web サーバ（`127.0.0.1:4173`）を自動起動します。
 - E2E 結果スクリーンショットは `npm run capture:e2e-screenshots` で生成できます。
+- Unit coverage レポートは `coverage/`（HTML: `coverage/index.html`）に出力されます。
+
+Coverage スナップショット（2026-02-21）:
+- `npm run test:unit:coverage`
+- 全体: `Statements 92.48% / Branches 81.02% / Functions 93.75% / Lines 92.52%`
 
 ## E2E結果スクリーンショット
 

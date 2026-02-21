@@ -46,6 +46,16 @@ function createSmfArrayBufferWithOutOfRangeMidiNote(): ArrayBuffer {
   return toArrayBuffer(midi.toArray())
 }
 
+function createSmfArrayBufferForNoteSortTieBreaks(): ArrayBuffer {
+  const midi = new Midi()
+  const track = midi.addTrack()
+  track.name = 'TieBreaks'
+  track.addNote({ midi: 40, time: 0.5, duration: 0.5 })
+  track.addNote({ midi: 39, time: 0.5, duration: 0.5 })
+  track.addNote({ midi: 41, time: 0.5, duration: 0.25 })
+  return toArrayBuffer(midi.toArray())
+}
+
 describe('parseSmfFromArrayBuffer', () => {
   it('parses bpm, normalizes track metadata, and sorts notes', () => {
     const result = parseSmfFromArrayBuffer(createValidSmfArrayBuffer())
@@ -114,6 +124,20 @@ describe('parseSmfFromArrayBuffer', () => {
     }
     expect(result.error.code).toBe('SMF_PARSE_FAILED')
     expect(result.error.message).toContain('tracks[0].notes[0].midi must be in the 0-127 range.')
+  })
+
+  it('sorts notes by duration and midi when timeMs is identical', () => {
+    const result = parseSmfFromArrayBuffer(createSmfArrayBufferForNoteSortTieBreaks())
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      throw new Error(result.error.message)
+    }
+
+    expect(result.value.tracks[0].notes).toEqual([
+      { midi: 41, timeMs: 500, durationMs: 250 },
+      { midi: 39, timeMs: 500, durationMs: 500 },
+      { midi: 40, timeMs: 500, durationMs: 500 },
+    ])
   })
 })
 
@@ -288,6 +312,62 @@ describe('convertSmfTrackToLaneChart', () => {
       { lane: 'D', fret: 0, timeMs: 200, durationMs: 100 },
       { lane: 'G', fret: 0, timeMs: 300, durationMs: 100 },
     ])
+  })
+
+  it('sorts notes by duration, fret, and lane when timeMs is identical', () => {
+    const tieBreakParsedSmf: ParsedSmf = {
+      bpm: 120,
+      tracks: [
+        {
+          index: 0,
+          name: 'TieBreaks',
+          noteCount: 4,
+          notes: [
+            { midi: 33, timeMs: 100, durationMs: 200 },
+            { midi: 34, timeMs: 100, durationMs: 200 },
+            { midi: 28, timeMs: 100, durationMs: 200 },
+            { midi: 38, timeMs: 100, durationMs: 150 },
+          ],
+        },
+      ],
+    }
+
+    const result = convertSmfTrackToLaneChart(tieBreakParsedSmf, 0)
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      throw new Error(result.error.message)
+    }
+
+    expect(result.value.notes).toEqual([
+      { lane: 'D', fret: 0, timeMs: 100, durationMs: 150 },
+      { lane: 'E', fret: 0, timeMs: 100, durationMs: 200 },
+      { lane: 'A', fret: 0, timeMs: 100, durationMs: 200 },
+      { lane: 'A', fret: 1, timeMs: 100, durationMs: 200 },
+    ])
+  })
+
+  it('keeps earliest resolved lane when a later lane has a larger fret', () => {
+    const customTuningParsedSmf: ParsedSmf = {
+      bpm: 120,
+      tracks: [
+        {
+          index: 0,
+          name: 'DescendingOpenStrings',
+          noteCount: 1,
+          notes: [{ midi: 40, timeMs: 0, durationMs: 100 }],
+        },
+      ],
+    }
+
+    const result = convertSmfTrackToLaneChart(customTuningParsedSmf, 0, {
+      openStringMidiByLane: { E: 40, A: 35, D: 30, G: 25 },
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      throw new Error(result.error.message)
+    }
+
+    expect(result.value.notes).toEqual([{ lane: 'E', fret: 0, timeMs: 0, durationMs: 100 }])
   })
 })
 

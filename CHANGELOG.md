@@ -24,6 +24,9 @@
 - e2e に MIDI import 統合シナリオを追加（正常SMFのimport完了 / 不正SMFの解析失敗表示）。
 - `lane-scroller` の unit test をさらに拡張（`hitLineRatio` 検証、`dispose/renderNow`、未知laneノートskip、防御分岐）。
 - `midi` parser の unit test に MIDI note `0-127` 範囲外ガード（`SMF_PARSE_FAILED`）を追加。
+- `midi` の unit test をさらに拡張（note/chart ソート tie-break、lane/fret 解決の優先順位分岐）。
+- `lane-scroller` の unit test をさらに拡張（chart省略時のダミーチャート、`stop()` 防御分岐、`syncCanvasSize` フォールバック、非数値fret）。
+- `latency-offset-storage` の unit test をさらに拡張（`window.localStorage` 解決経路、missing key、getter例外フォールバック）。
 
 ### Changed
 - CI を `verify`（lint/typecheck/unit/build）と `e2e`（Playwright）へ分離。
@@ -35,6 +38,7 @@
 - `docs/testing-guide.md` を更新し、engine 追加シナリオと到達困難分岐（`src/scoring/engine.ts:399`）の前提を明記。
 - unit coverage を改善（全体 `Statements 97.20% / Branches 91.97% / Functions 96.87% / Lines 97.33%`、`engine.ts` branch `98.71%`）。
 - unit coverage を改善（全体 `Statements 98.95% / Branches 94.52% / Functions 98.95% / Lines 99.11%`）。
+- unit coverage を改善（全体 `Statements 99.82% / Branches 99.63% / Functions 100% / Lines 99.82%`）。
 
 ## [0.1.0] - 2026-02-20
 

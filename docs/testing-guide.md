@@ -14,7 +14,7 @@
   - `src/scoring/pitch.test.ts`: 開放弦定義解決、midi/cents 変換の異常値。
   - `src/scoring/adapters.test.ts`: chart/lane-scroller 変換の正常系と入力異常系。
   - `src/scoring/latency-offset-storage.test.ts`: localStorage 読み書き・例外時フォールバック。
-  - `src/chart/midi.test.ts`: SMF parse、トラック変換、エラーコード（`SMF_PARSE_FAILED`、`TRACK_NOT_FOUND`、`NOTE_OUT_OF_RANGE` など）。
+  - `src/chart/midi.test.ts`: SMF parse、トラック変換、エラーコード（`SMF_PARSE_FAILED`、`TRACK_NOT_FOUND`、`NOTE_OUT_OF_RANGE` など）、ソートtie-break（time/duration/midi, lane/fret）。
 
 ### E2E test（`playwright`）
 
@@ -49,6 +49,7 @@
 | Unit | storage/config/adapters の境界値検証 | 設定・保存・変換ロジックが異常入力で安全に失敗する |
 | Unit | MIDI parse/変換と異常系 | 正常系は lane/fret へ変換、異常系は規定エラーコードを返す |
 | Unit | MIDI note 範囲外ガード（`normalizeMidiNote`） | `tracks[*].notes[*].midi` が `0-127` 範囲外のとき `SMF_PARSE_FAILED` を返す |
+| Unit | MIDI/Lane の tie-break ソート | 同時刻ノートで duration/midi/fret/lane 優先順が安定している |
 | E2E | 画面初期表示と主要UI存在確認 | 主要パネルが表示され、初期状態が崩れていない |
 | E2E | lane 操作・速度変更・slider操作 | UI状態と表示値が入力操作に追従する |
 | Manual | マイク入力から採点までの一連動作 | RMS/Pitch/判定表示が連動し、操作可能状態を維持する |
@@ -71,8 +72,10 @@
 
 Coverage スナップショット（2026-02-21）:
 - `npm run test:unit:coverage`
-- 全体: `Statements 98.95% / Branches 94.52% / Functions 98.95% / Lines 99.11%`
-- `src/ui/lane-scroller.ts`: `Statements 99.48% / Branches 91.78% / Functions 96.15% / Lines 100%`
+- 全体: `Statements 99.82% / Branches 99.63% / Functions 100% / Lines 99.82%`
+- `src/chart/midi.ts`: `Statements 100% / Branches 100% / Functions 100% / Lines 100%`
+- `src/ui/lane-scroller.ts`: `Statements 100% / Branches 100% / Functions 100% / Lines 100%`
+- `src/scoring/latency-offset-storage.ts`: `Statements 100% / Branches 100% / Functions 100% / Lines 100%`
 - `src/scoring/engine.ts`: `Statements 99.35% / Branches 98.71% / Functions 100% / Lines 99.34%`
 - 補足: `engine.ts` は `findBestCandidate` 内の source-order 再選択分岐（`src/scoring/engine.ts:399`）のみ未到達。
 

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   clearLatencyOffsetMs,
   DEFAULT_LATENCY_OFFSET_STORAGE_KEY,
@@ -58,8 +58,34 @@ class TestStorage implements Storage {
 }
 
 describe('loadLatencyOffsetMs', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
   it('returns fallback when storage is unavailable', () => {
     expect(loadLatencyOffsetMs({ fallbackMs: 12 })).toBe(12)
+  })
+
+  it('uses window.localStorage when storage option is omitted', () => {
+    const localStorage = new TestStorage({
+      [DEFAULT_LATENCY_OFFSET_STORAGE_KEY]: '15',
+    })
+    vi.stubGlobal('window', { localStorage })
+
+    expect(loadLatencyOffsetMs()).toBe(15)
+  })
+
+  it('returns fallback when window.localStorage getter throws', () => {
+    const windowWithThrowingStorage: Record<string, unknown> = {}
+    Object.defineProperty(windowWithThrowingStorage, 'localStorage', {
+      configurable: true,
+      get: () => {
+        throw new Error('localStorage access blocked')
+      },
+    })
+    vi.stubGlobal('window', windowWithThrowingStorage)
+
+    expect(loadLatencyOffsetMs({ fallbackMs: 21 })).toBe(21)
   })
 
   it('loads numeric value from storage and defaults on invalid values', () => {
@@ -72,6 +98,11 @@ describe('loadLatencyOffsetMs', () => {
       [DEFAULT_LATENCY_OFFSET_STORAGE_KEY]: 'invalid',
     })
     expect(loadLatencyOffsetMs({ storage: invalidStorage, fallbackMs: 7 })).toBe(7)
+  })
+
+  it('returns fallback when stored value is missing', () => {
+    const storage = new TestStorage()
+    expect(loadLatencyOffsetMs({ storage, fallbackMs: 5 })).toBe(5)
   })
 
   it('returns fallback when storage access throws', () => {

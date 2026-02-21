@@ -307,6 +307,15 @@ describe('LaneScroller', () => {
     )
   })
 
+  it('uses dummy chart when chart option is omitted', () => {
+    setupEnvironment()
+    const scroller = new LaneScroller({ canvas: createMockCanvas() })
+
+    scroller.setPlayheadMs(2500)
+
+    expect(scroller.getPlayheadMs()).toBe(100)
+  })
+
   it('calls setTransform when device pixel ratio changes backing canvas size', () => {
     const { windowMock } = setupEnvironment()
     windowMock.devicePixelRatio = 2
@@ -339,6 +348,22 @@ describe('LaneScroller', () => {
 
     scroller.dispose()
     expect(windowMock.cancelAnimationFrame).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not cancel animation frame when stop is called with null frame id', () => {
+    const { windowMock, setNowMs } = setupEnvironment()
+    const scroller = new LaneScroller({ canvas: createMockCanvas(), chart: createChart() })
+    const internalScroller = scroller as unknown as { animationFrameId: number | null }
+
+    setNowMs(0)
+    scroller.start()
+    internalScroller.animationFrameId = null
+    windowMock.cancelAnimationFrame.mockClear()
+
+    scroller.stop()
+
+    expect(scroller.isRunning()).toBe(false)
+    expect(windowMock.cancelAnimationFrame).not.toHaveBeenCalled()
   })
 
   it('draws one frame when renderNow is called', () => {
@@ -396,6 +421,46 @@ describe('LaneScroller', () => {
 
     const renderedTexts = fillText.mock.calls.map(([text]) => text)
     expect(renderedTexts).not.toContain('9')
+  })
+
+  it('uses syncCanvasSize fallback values when client size and dpr are zero', () => {
+    const { windowMock } = setupEnvironment()
+    windowMock.devicePixelRatio = 0
+
+    const clearRect = vi.fn()
+    const setTransform = vi.fn()
+    const { canvas } = createMockCanvasBundle({
+      width: 250.6,
+      height: 140.4,
+      clientWidth: 0,
+      clientHeight: 0,
+      context: createMockContext({ clearRect, setTransform }),
+    })
+    new LaneScroller({ canvas, chart: createChart() })
+
+    expect(canvas.width).toBe(250)
+    expect(canvas.height).toBe(140)
+    expect(setTransform).toHaveBeenCalledWith(1, 0, 0, 1, 0, 0)
+    expect(clearRect).toHaveBeenCalledWith(0, 0, 250, 140)
+  })
+
+  it('does not draw fret text when note fret is not a number', () => {
+    setupEnvironment()
+    const fillText = vi.fn()
+    const { canvas } = createMockCanvasBundle({
+      context: createMockContext({ fillText }),
+    })
+    const chart = {
+      loopDurationMs: 1000,
+      notes: [{ lane: 'E', timeMs: 0, durationMs: 120, fret: 'x' }],
+    } as unknown as LaneScrollerChart
+    const scroller = new LaneScroller({ canvas, chart })
+
+    fillText.mockClear()
+    scroller.renderNow()
+
+    const renderedTexts = fillText.mock.calls.map(([text]) => text)
+    expect(renderedTexts).not.toContain('x')
   })
 
   it('emits fps samples when elapsed time reaches sample window', () => {

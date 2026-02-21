@@ -2,6 +2,11 @@
 
 本書は Rifflane のテスト方針と実行手順を定義します。前提は Node.js `20.x`、npm、Playwright Chromium 実行環境です。
 
+## 参照ドキュメント
+
+- テスト実行コマンドと環境マトリクス: [`README.md`](../README.md)
+- 実オーディオ統合テスト設計: [`docs/audio-integration-test-plan.md`](./audio-integration-test-plan.md)
+
 ## テスト戦略
 
 ### Unit test（`vitest`）
@@ -105,6 +110,6 @@ npm run capture:e2e-screenshots
 
 - `src/scoring/engine.ts:395` の「同一 occurrence かつ sourceOrder がより小さい候補へ更新」分岐は、`normalizeChart` が time/sourceOrder 昇順へ正規化する前提では通常入力で成立しない。
 - 実マイク入力・ブラウザ権限・OS依存挙動は自動テストで完全再現できないため、manual test が必須。
-- E2E は UI と MIDI import までを自動化済み。実オーディオ入力を伴う採点結果の統合検証は未自動化。
+- E2E は UI と MIDI import までを自動化済み。実オーディオ入力を伴う採点結果の統合検証は `docs/audio-integration-test-plan.md` に設計を定義し、現状は手動運用。
 - パフォーマンス指標（FPS、worklet 遅延、長時間安定性）の閾値判定は CI に未組み込み。
 - デバイスマトリクス（Windows/WSL2/Android 実機差分）は継続的な手動回帰に依存。

@@ -27,6 +27,7 @@
 - `midi` の unit test をさらに拡張（note/chart ソート tie-break、lane/fret 解決の優先順位分岐）。
 - `lane-scroller` の unit test をさらに拡張（chart省略時のダミーチャート、`stop()` 防御分岐、`syncCanvasSize` フォールバック、非数値fret）。
 - `latency-offset-storage` の unit test をさらに拡張（`window.localStorage` 解決経路、missing key、getter例外フォールバック）。
+- 実オーディオ入力を伴う統合テスト設計書 `docs/audio-integration-test-plan.md` を追加（シナリオ、合格基準、証跡テンプレート）。
 
 ### Changed
 - CI を `verify`（lint/typecheck/unit/build）と `e2e`（Playwright）へ分離。
@@ -39,6 +40,7 @@
 - unit coverage を改善（全体 `Statements 97.20% / Branches 91.97% / Functions 96.87% / Lines 97.33%`、`engine.ts` branch `98.71%`）。
 - unit coverage を改善（全体 `Statements 98.95% / Branches 94.52% / Functions 98.95% / Lines 99.11%`）。
 - unit coverage を改善（全体 `Statements 99.82% / Branches 99.63% / Functions 100% / Lines 99.82%`）。
+- `README.md` と `docs/testing-guide.md` に `docs/audio-integration-test-plan.md` への参照導線を追加し、Testing matrix と既知ギャップを更新。
 
 ## [0.1.0] - 2026-02-20
 

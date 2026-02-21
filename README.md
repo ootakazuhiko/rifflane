@@ -7,6 +7,7 @@ Rifflane は、4弦ベース向けのレーン表示とリアルタイム採点�
 - 変更履歴: [`CHANGELOG.md`](CHANGELOG.md)
 - バージョニング方針: [`docs/versioning-policy.md`](docs/versioning-policy.md)
 - テストガイド: [`docs/testing-guide.md`](docs/testing-guide.md)
+- 実オーディオ統合テスト設計: [`docs/audio-integration-test-plan.md`](docs/audio-integration-test-plan.md)
 
 ## Setup instructions
 
@@ -50,6 +51,7 @@ npm run build
 - `test:e2e`: `playwright test`
 
 テスト戦略・主要シナリオ・CI 連携・既知ギャップは [`docs/testing-guide.md`](docs/testing-guide.md) を参照してください。
+実オーディオ入力を伴う統合検証の設計と判定観点は [`docs/audio-integration-test-plan.md`](docs/audio-integration-test-plan.md) を参照してください。
 E2E 結果スクリーンショット生成は `npm run capture:e2e-screenshots` を使用してください。
 
 ## E2E結果スクリーンショット
@@ -183,6 +185,7 @@ adb reverse --remove tcp:5173
 ## Testing matrix
 
 手動検証を以下のマトリクスで実施してください。
+実オーディオ統合テストの詳細シナリオは [`docs/audio-integration-test-plan.md`](docs/audio-integration-test-plan.md) を参照してください。
 
 | ID | 環境 | 検証対象 | 手順 | 期待結果 |
 | --- | --- | --- | --- | --- |
@@ -193,3 +196,5 @@ adb reverse --remove tcp:5173
 | M-05 | WSL2 + Windowsブラウザ | WSL2 接続性 | `npm run dev -- --host 0.0.0.0 --port 5173` | Windows から UI 表示、操作可能 |
 | M-06 | Android + Chrome | `adb reverse` 経由表示 | `adb reverse tcp:5173 tcp:5173` 後に `http://localhost:5173` | UI 表示、操作可能 |
 | M-07 | Android + Chrome | audio/scoring 基本動作 | 権限許可、`開始`、lane `start` | メーター更新、判定イベント更新 |
+| M-08 | 共通（設計レビュー） | 実オーディオ統合テスト設計の確認 | `docs/audio-integration-test-plan.md` の対象環境・手順・判定基準をレビュー | 実施前提（環境/観点/記録項目）が合意されている |
+| M-09 | Windows + Chrome/Edge / Android + Chrome | 実オーディオ統合テスト実施 | `docs/audio-integration-test-plan.md` のシナリオを順に実行し、結果を記録 | 各シナリオの Pass/Fail と再現条件を記録できる |

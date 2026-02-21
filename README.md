@@ -76,7 +76,7 @@ npm run build
 
 - Playwright 初回実行時のみ、必要に応じて `npx playwright install --with-deps chromium` を実行してください。
 
-2026-02-21 時点で `lint/typecheck/test:unit/test:unit:coverage/test:e2e/build` はローカル実行で通過しています。
+2026-02-21 時点で `lint/typecheck/test:unit/test:unit:coverage/test:e2e/build` はローカル実行で通過しています（unit coverage: `Statements 94.93% / Branches 85.03% / Functions 94.79% / Lines 95.01%`）。
 
 ## 現行実装の範囲
 

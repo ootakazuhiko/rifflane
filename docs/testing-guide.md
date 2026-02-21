@@ -63,7 +63,8 @@
 
 Coverage スナップショット（2026-02-21）:
 - `npm run test:unit:coverage`
-- 全体: `Statements 92.48% / Branches 81.02% / Functions 93.75% / Lines 92.52%`
+- 全体: `Statements 94.93% / Branches 85.03% / Functions 94.79% / Lines 95.01%`
+- 補足: 防御的分岐（例: 不正MIDI値、到達困難なガード分岐）は一部未到達。
 
 ## E2E結果スクリーンショット
 

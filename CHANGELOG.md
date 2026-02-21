@@ -18,6 +18,8 @@
 - `@vitest/coverage-v8` を追加し、`test:unit:coverage` を実行可能化。
 - `lane-scroller` の unit test を追加（`src/ui/lane-scroller.test.ts`）。
 - `chart` 変換ロジックの unit test を拡張（`src/chart/midi.test.ts`: BPM fallback / options / 補助関数群）。
+- `engine` の追加 unit test を拡張（候補選択分岐、無効チャート入力）。
+- `lane-scroller` の unit test をさらに拡張（2D context欠如、`setTransform` 分岐、FPS callback解除）。
 
 ### Changed
 - CI を `verify`（lint/typecheck/unit/build）と `e2e`（Playwright）へ分離。
@@ -25,6 +27,7 @@
 - `README.md` にリリース管理ドキュメント参照を追加。
 - e2e に `localStorage` 永続化検証（latency offset / diagnostics mode reload 復元）を追加。
 - `.gitignore` に `coverage/` を追加。
+- unit coverage を改善（全体 `Statements 94.93% / Branches 85.03% / Functions 94.79% / Lines 95.01%`）。
 
 ## [0.1.0] - 2026-02-20
 

@@ -144,6 +144,26 @@ describe('convertSmfTrackToLaneChart', () => {
     expect(result.error.code).toBe('TRACK_NOT_FOUND')
   })
 
+  it('returns TRACK_NOT_FOUND when track index is negative', () => {
+    const result = convertSmfTrackToLaneChart(parsedSmf, -1)
+    expect(result.ok).toBe(false)
+    if (result.ok) {
+      throw new Error('Expected TRACK_NOT_FOUND')
+    }
+    expect(result.error.code).toBe('TRACK_NOT_FOUND')
+    expect(result.error.message).toContain('non-negative integer')
+  })
+
+  it('returns TRACK_NOT_FOUND when track index is fractional', () => {
+    const result = convertSmfTrackToLaneChart(parsedSmf, 0.5)
+    expect(result.ok).toBe(false)
+    if (result.ok) {
+      throw new Error('Expected TRACK_NOT_FOUND')
+    }
+    expect(result.error.code).toBe('TRACK_NOT_FOUND')
+    expect(result.error.message).toContain('Received: 0.5')
+  })
+
   it('returns INVALID_OPTIONS when options are not valid', () => {
     const result = convertSmfTrackToLaneChart(parsedSmf, 0, { maxFret: -1 })
     expect(result.ok).toBe(false)
@@ -211,6 +231,45 @@ describe('convertSmfTrackToLaneChart', () => {
     ])
     expect(result.value.loopDurationMs).toBe(400)
   })
+
+  it('keeps defaults for undefined openStringMidiByLane entries', () => {
+    const optionParsedSmf: ParsedSmf = {
+      bpm: 120,
+      tracks: [
+        {
+          index: 0,
+          name: 'PartialCustomTuning',
+          noteCount: 4,
+          notes: [
+            { midi: 30, timeMs: 0, durationMs: 100 },
+            { midi: 33, timeMs: 100, durationMs: 100 },
+            { midi: 40, timeMs: 200, durationMs: 100 },
+            { midi: 43, timeMs: 300, durationMs: 100 },
+          ],
+        },
+      ],
+    }
+
+    const result = convertSmfTrackToLaneChart(optionParsedSmf, 0, {
+      openStringMidiByLane: {
+        E: 30,
+        A: undefined,
+        D: 40,
+        G: undefined,
+      },
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      throw new Error(result.error.message)
+    }
+
+    expect(result.value.notes).toEqual([
+      { lane: 'E', fret: 0, timeMs: 0, durationMs: 100 },
+      { lane: 'A', fret: 0, timeMs: 100, durationMs: 100 },
+      { lane: 'D', fret: 0, timeMs: 200, durationMs: 100 },
+      { lane: 'G', fret: 0, timeMs: 300, durationMs: 100 },
+    ])
+  })
 })
 
 describe('listSmfTracks', () => {
@@ -259,6 +318,21 @@ describe('deriveLoopDurationMs', () => {
     expect(() => {
       deriveLoopDurationMs([{ timeMs: Number.NaN, durationMs: 100 }])
     }).toThrow('notes[0].timeMs must be a finite number.')
+  })
+
+  it('returns 1 when all computed end times are non-positive', () => {
+    expect(
+      deriveLoopDurationMs([
+        { timeMs: -100, durationMs: -20 },
+        { timeMs: -0.1, durationMs: 0 },
+      ]),
+    ).toBe(1)
+  })
+
+  it('throws when durationMs is non-finite', () => {
+    expect(() => {
+      deriveLoopDurationMs([{ timeMs: 0, durationMs: Number.POSITIVE_INFINITY }])
+    }).toThrow('notes[0].durationMs must be a finite number.')
   })
 })
 

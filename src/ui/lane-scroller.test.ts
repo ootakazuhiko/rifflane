@@ -44,8 +44,18 @@ class MockWindow {
 
 function noop(): void {}
 
-function createMockCanvas(): HTMLCanvasElement {
-  const context = {
+interface MockCanvasOptions {
+  width?: number
+  height?: number
+  clientWidth?: number
+  clientHeight?: number
+  context?: CanvasRenderingContext2D | null
+}
+
+function createMockContext(
+  overrides: Partial<CanvasRenderingContext2D> = {},
+): CanvasRenderingContext2D {
+  return {
     clearRect: noop,
     fillRect: noop,
     beginPath: noop,
@@ -63,15 +73,30 @@ function createMockCanvas(): HTMLCanvasElement {
     font: '',
     textAlign: 'start',
     textBaseline: 'alphabetic',
+    ...overrides,
   } as unknown as CanvasRenderingContext2D
+}
+
+function createMockCanvasBundle(options: MockCanvasOptions = {}): {
+  canvas: HTMLCanvasElement
+  context: CanvasRenderingContext2D | null
+} {
+  const context = options.context === undefined ? createMockContext() : options.context
 
   return {
-    width: 320,
-    height: 180,
-    clientWidth: 320,
-    clientHeight: 180,
-    getContext: (contextId: string) => (contextId === '2d' ? context : null),
-  } as unknown as HTMLCanvasElement
+    canvas: {
+      width: options.width ?? 320,
+      height: options.height ?? 180,
+      clientWidth: options.clientWidth ?? 320,
+      clientHeight: options.clientHeight ?? 180,
+      getContext: (contextId: string) => (contextId === '2d' ? context : null),
+    } as unknown as HTMLCanvasElement,
+    context,
+  }
+}
+
+function createMockCanvas(): HTMLCanvasElement {
+  return createMockCanvasBundle().canvas
 }
 
 function setupEnvironment(): { windowMock: MockWindow; setNowMs: (nextNowMs: number) => void } {
@@ -203,6 +228,31 @@ describe('LaneScroller', () => {
     ).toThrow('Unsupported lane name: X')
   })
 
+  it('throws when 2D context is unavailable', () => {
+    setupEnvironment()
+    const { canvas } = createMockCanvasBundle({ context: null })
+
+    expect(() => new LaneScroller({ canvas, chart: createChart() })).toThrow(
+      '2D canvas context is required.',
+    )
+  })
+
+  it('calls setTransform when device pixel ratio changes backing canvas size', () => {
+    const { windowMock } = setupEnvironment()
+    windowMock.devicePixelRatio = 2
+
+    const setTransform = vi.fn()
+    const { canvas } = createMockCanvasBundle({
+      context: createMockContext({ setTransform }),
+    })
+    new LaneScroller({ canvas, chart: createChart() })
+
+    expect(setTransform).toHaveBeenCalledTimes(1)
+    expect(setTransform).toHaveBeenCalledWith(2, 0, 0, 2, 0, 0)
+    expect(canvas.width).toBe(640)
+    expect(canvas.height).toBe(360)
+  })
+
   it('emits fps samples when elapsed time reaches sample window', () => {
     const { windowMock, setNowMs } = setupEnvironment()
     const samples: LaneScrollerFpsSample[] = []
@@ -232,6 +282,33 @@ describe('LaneScroller', () => {
       elapsedMs: 12,
     })
     expect(samples[0].fps).toBeCloseTo((2 / 12) * 1000, 8)
+
+    scroller.stop()
+  })
+
+  it('does not emit fps sample after callback is cleared with undefined', () => {
+    const { windowMock, setNowMs } = setupEnvironment()
+    const onFpsSample = vi.fn()
+    const scroller = new LaneScroller({
+      canvas: createMockCanvas(),
+      chart: createChart(),
+      fpsSampleWindowMs: 10,
+      onFpsSample,
+    })
+
+    scroller.setFpsSampleCallback(undefined)
+
+    setNowMs(0)
+    scroller.start()
+
+    setNowMs(6)
+    expect(windowMock.runNextFrame(6)).toBe(true)
+    setNowMs(12)
+    expect(windowMock.runNextFrame(12)).toBe(true)
+    setNowMs(24)
+    expect(windowMock.runNextFrame(24)).toBe(true)
+
+    expect(onFpsSample).not.toHaveBeenCalled()
 
     scroller.stop()
   })

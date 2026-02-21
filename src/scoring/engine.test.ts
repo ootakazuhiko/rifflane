@@ -20,6 +20,28 @@ function createEngine(): LoopScoringEngine {
 }
 
 describe('LoopScoringEngine', () => {
+  it('throws for invalid chart.loopDurationMs values', () => {
+    expect(
+      () =>
+        new LoopScoringEngine({
+          chart: {
+            loopDurationMs: 0,
+            notes: [],
+          },
+        }),
+    ).toThrow('loopDurationMs must be > 0.')
+
+    expect(
+      () =>
+        new LoopScoringEngine({
+          chart: {
+            loopDurationMs: Number.NaN,
+            notes: [],
+          },
+        }),
+    ).toThrow('loopDurationMs must be a finite number.')
+  })
+
   it('judges Perfect/Good/Miss based on pitch and timing windows', () => {
     const engine = createEngine()
 
@@ -202,6 +224,86 @@ describe('LoopScoringEngine', () => {
     expect(unfilteredEvents).toHaveLength(1)
     expect(unfilteredEvents[0].note?.id).toBe('a-note')
     expect(unfilteredEvents[0].timingErrorMs).toBe(0)
+  })
+
+  it('keeps the current best candidate when next candidate has larger abs timing error', () => {
+    const chart: LoopScoringChart = {
+      loopDurationMs: 2000,
+      notes: [
+        {
+          id: 'near',
+          lane: 'E',
+          timeMs: 1000,
+          durationMs: 120,
+          fret: 0,
+        },
+        {
+          id: 'far',
+          lane: 'A',
+          timeMs: 1030,
+          durationMs: 120,
+          fret: 0,
+        },
+      ],
+    }
+
+    const engine = new LoopScoringEngine({ chart })
+    const events = engine.evaluate({
+      evaluatedAtMs: 1010,
+      pitchCents: 2800,
+    })
+
+    expect(events).toHaveLength(1)
+    expect(events[0].note?.id).toBe('near')
+    expect(events[0].timingErrorMs).toBe(10)
+  })
+
+  it('prefers earlier occurrence time when abs timing errors are equal', () => {
+    const chart: LoopScoringChart = {
+      loopDurationMs: 1000,
+      notes: [
+        {
+          id: 'e-late-loop',
+          lane: 'E',
+          timeMs: 100,
+          durationMs: 120,
+          fret: 0,
+        },
+        {
+          id: 'a-early-loop',
+          lane: 'A',
+          timeMs: 700,
+          durationMs: 120,
+          fret: 0,
+        },
+      ],
+    }
+
+    const engine = new LoopScoringEngine({
+      chart,
+      config: {
+        timingWindowMs: 300,
+        perfectTimingWindowMs: 40,
+      },
+    })
+
+    const first = engine.evaluate({
+      evaluatedAtMs: 100,
+      pitchCents: 2800,
+      lane: 'E',
+    })
+    expect(first).toHaveLength(1)
+    expect(first[0].note?.id).toBe('e-late-loop')
+    expect(first[0].note?.loopIndex).toBe(0)
+
+    const second = engine.evaluate({
+      evaluatedAtMs: 900,
+      pitchCents: 3300,
+    })
+    expect(second).toHaveLength(1)
+    expect(second[0].note?.id).toBe('a-early-loop')
+    expect(second[0].note?.occurrenceTimeMs).toBe(700)
+    expect(second[0].timingErrorMs).toBe(200)
   })
 
   it('setChart replaces notes and reset restarts loop progress for the current chart', () => {
